@@ -11,6 +11,37 @@ harmonics over the whole sky, and evaluated at `u = t_frame - r / c` throughout
 a sphere, so a still or movie shows the wave propagating outward from the
 source.
 
+## Gallery
+
+A few stills produced with Fewview, across colour palettes and camera views.
+
+<table>
+  <tr>
+    <td><img src="docs/images/gallery-magma-oblique.png" alt="magma, oblique view" width="100%"></td>
+    <td><img src="docs/images/gallery-rainbow-oblique.png" alt="rainbow, oblique view" width="100%"></td>
+  </tr>
+  <tr>
+    <td align="center"><code>magma</code>, oblique</td>
+    <td align="center"><code>rainbow</code>, oblique</td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/gallery-cool-faceon.png" alt="cool, face-on view" width="100%"></td>
+    <td><img src="docs/images/gallery-plasma-oblique.png" alt="plasma, oblique view" width="100%"></td>
+  </tr>
+  <tr>
+    <td align="center"><code>cool</code>, face-on</td>
+    <td align="center"><code>plasma</code>, oblique</td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/gallery-plasma-faceon.png" alt="plasma, face-on view" width="100%"></td>
+    <td><img src="docs/images/gallery-magma-faceon.png" alt="magma, face-on view" width="100%"></td>
+  </tr>
+  <tr>
+    <td align="center"><code>plasma</code>, face-on</td>
+    <td align="center"><code>magma</code>, face-on</td>
+  </tr>
+</table>
+
 ## Installation
 
 Fewview reads FEW models directly, so install it into the **same environment**
@@ -126,6 +157,19 @@ workflow.
 - **The amplitude model is capped at `nmax=55`.** Requesting a larger `nmax`
   emits a warning and uses the model's trained set; at high eccentricity the
   render will therefore be missing some high-overtone content.
+
+## Acknowledgements
+
+Fewview's volume-rendering approach is inspired by two codes that pioneered this
+style of visualization for numerical relativity simulations:
+
+- [**gwpv**](https://github.com/nilsvu/gwpv) by Nils Vu, a ParaView-based
+  renderer for gravitational waves from numerical relativity.
+- **ROSE**, which renders the radiated field of numerical relativity
+  simulations as an outgoing volume.
+
+Fewview adapts that idea to the mode-resolved EMRI waveforms produced by
+[FastEMRIWaveforms](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms).
 
 ## License
 
