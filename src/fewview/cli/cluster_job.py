@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create an Iridis X Slurm array workflow for an EMRI animation."""
+"""Create a Slurm array job that renders an EMRI animation on a GPU cluster."""
 
 from __future__ import annotations
 
@@ -9,44 +9,12 @@ import shlex
 import stat
 import sys
 import textwrap
-from dataclasses import dataclass
 from pathlib import Path
 
 
-@dataclass(frozen=True)
-class Partition:
-    gpus_per_node: int
-    default_concurrency: int
-    restricted: bool = False
-    preemptible: bool = False
-
-
-PARTITIONS = {
-    "a100": Partition(gpus_per_node=2, default_concurrency=8),
-    "swarm_a100": Partition(
-        gpus_per_node=4,
-        default_concurrency=4,
-        restricted=True,
-    ),
-    "swarm_h100": Partition(
-        gpus_per_node=8,
-        default_concurrency=8,
-        restricted=True,
-    ),
-    "scavenger_4a100": Partition(
-        gpus_per_node=4,
-        default_concurrency=8,
-        preemptible=True,
-    ),
-    "scavenger_8h100": Partition(
-        gpus_per_node=8,
-        default_concurrency=8,
-        preemptible=True,
-    ),
-}
-
-
 DEFAULT_FRAMES = 1000
+# How many array tasks run at once when --max-concurrent is not given.
+DEFAULT_CONCURRENCY = 8
 
 
 def _positive(value: str) -> int:
@@ -112,12 +80,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "modes_file",
         type=Path,
-        help="relativistic-modes.npz on the cluster filesystem",
+        help="relativistic-modes.npz produced by fewview-render",
     )
     parser.add_argument(
         "--partition",
-        choices=tuple(PARTITIONS),
-        default="a100",
+        default="gpu",
+        help="Slurm partition with GPUs; set to your cluster's GPU partition name",
+    )
+    parser.add_argument(
+        "--preemptible",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "partition may preempt jobs; adds '#SBATCH --requeue' so a "
+            "restarted task skips already-completed segments"
+        ),
     )
     parser.add_argument(
         "--project-dir",
@@ -128,13 +105,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--job-dir",
         type=Path,
-        default=Path("iridisx-emri-job"),
+        default=Path("fewview-render-job"),
     )
     environment = parser.add_mutually_exclusive_group()
     environment.add_argument(
         "--venv",
         type=Path,
-        default=Path(".venv-iridisx"),
+        default=Path(".venv"),
         help="virtualenv to source (default); ignored when --conda-env is set",
     )
     environment.add_argument(
@@ -443,10 +420,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.width % 2 or args.height % 2:
         raise SystemExit("MP4 width and height must both be even")
 
-    partition = PARTITIONS[args.partition]
     concurrency = min(
         args.segments,
-        args.max_concurrent or partition.default_concurrency,
+        args.max_concurrent or DEFAULT_CONCURRENCY,
     )
     render_keys = (
         "segments",
@@ -530,7 +506,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.mail_user
         else []
     )
-    requeue = ["#SBATCH --requeue"] if partition.preemptible else []
+    requeue = ["#SBATCH --requeue"] if args.preemptible else []
     backend = ""
     runner_prefix = ""
     if args.headless_backend == "egl":
@@ -647,18 +623,14 @@ def main(argv: list[str] | None = None) -> int:
         f"Created {render_path}",
         f"Created {merge_path}",
         f"Created {submit_path}",
-        f"Partition: {args.partition} ({partition.gpus_per_node} GPUs/node)",
+        f"Partition: {args.partition}",
         f"Array: {args.segments} segments, up to {concurrency} concurrent",
         f"Movie: {args.frames} frames at {args.fps} fps "
         f"({args.frames / args.fps:.1f} s)",
     ]
-    if partition.restricted:
+    if args.preemptible:
         summary.append(
-            "Note: this partition is restricted to eligible ECS/ORC staff and PGRs."
-        )
-    if partition.preemptible:
-        summary.append(
-            "Note: this scavenger partition may preempt and requeue render tasks."
+            "Note: preemptible partition; tasks requeue and skip finished segments."
         )
     summary.append(f"Submit with: {submit_path}")
     sys.stdout.write("\n".join(summary) + "\n")
