@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fewview"
+description = "Full-sky volume visualizations for FastEMRIWaveforms EMRI waveforms"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Ben Leather" }]
+keywords = [
+    "gravitational-waves",
+    "EMRI",
+    "visualization",
+    "volume-rendering",
+    "FastEMRIWaveforms",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+dynamic = ["version"]
+
+# Fewview reads FastEMRIWaveforms models directly, so `few` must be importable.
+# It is intentionally not pinned here: install Fewview into the same
+# environment as your existing FastEMRIWaveforms installation.
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib>=3.6",
+    "numba",
+    "pyvista>=0.44",
+    "imageio",
+    "imageio-ffmpeg",
+    "pillow",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.urls]
+Homepage = "https://github.com/bjl1u25/fewview"
+Issues = "https://github.com/bjl1u25/fewview/issues"
+
+[project.scripts]
+fewview-render = "fewview.cli.render_still:main"
+fewview-animate = "fewview.cli.animate:main"
+fewview-cluster-job = "fewview.cli.cluster_job:main"
+fewview-cluster-segment = "fewview.cli.cluster_segment:main"
+fewview-cluster-merge = "fewview.cli.cluster_merge:main"
+
+[tool.hatch.version]
+path = "src/fewview/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fewview"]
