@@ -214,16 +214,27 @@ class RelativisticModeWaveform:
             )
         )
 
-    def orbital_position(self) -> np.ndarray:
-        r"""Return the osculating equatorial trajectory in units of ``M``.
+    def orbital_position(self, method: str = "exact") -> np.ndarray:
+        r"""Return the equatorial secondary trajectory in units of ``M``.
 
-        The Boyer--Lindquist radial coordinate is reconstructed from FEW's
-        relativistic trajectory as
-        :math:`r=p/(1+e\cos\Phi_r)`.  The azimuth is FEW's accumulated
-        :math:`\Phi_\phi`; this is a display coordinate transformation, not a
-        separate approximate waveform model.
+        Args:
+            method: ``"exact"`` (default) reconstructs the true Boyer--Lindquist
+                coordinates of the osculating Kerr geodesic from FEW's action
+                angles via the Lynch & Burke conversion (`arXiv:2411.04955
+                <https://arxiv.org/abs/2411.04955>`_); see
+                :mod:`fewview.geodesic`. ``"approx"`` uses the quick display
+                mapping :math:`r=p/(1+e\cos\Phi_r)`, :math:`\phi=\Phi_\phi`,
+                which mis-locates the radial phase by tens of percent of the
+                radial range. ``"exact"`` falls back to ``"approx"`` when the
+                waveform carries no spin (mode files written before it was
+                recorded).
+
+        Returns:
+            An ``(N, 3)`` array of Cartesian ``(x, y, 0)`` positions in ``M``.
         """
 
+        if method not in ("exact", "approx"):
+            raise ValueError("method must be 'exact' or 'approx'")
         if not self.has_trajectory:
             raise ValueError(
                 "This mode waveform does not include a FEW trajectory. "
@@ -232,9 +243,18 @@ class RelativisticModeWaveform:
         _validate_mode_waveform(self)
         p = np.asarray(self.trajectory_p, dtype=float)
         e = np.asarray(self.trajectory_e, dtype=float)
-        phi = np.asarray(self.trajectory_phi_phi, dtype=float)
+        phi_phi = np.asarray(self.trajectory_phi_phi, dtype=float)
         phi_r = np.asarray(self.trajectory_phi_r, dtype=float)
-        radial_position = p / (1.0 + e * np.cos(phi_r))
+
+        if method == "exact" and self.spin is not None:
+            from .geodesic import boyer_lindquist_equatorial
+
+            radial_position, phi = boyer_lindquist_equatorial(
+                float(self.spin), p, e, phi_r, phi_phi
+            )
+        else:
+            radial_position = p / (1.0 + e * np.cos(phi_r))
+            phi = phi_phi
         return np.column_stack(
             (
                 radial_position * np.cos(phi),
