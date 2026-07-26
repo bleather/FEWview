@@ -313,6 +313,28 @@ def polarizations_from_complex(
     raise ValueError("convention must be 'few' or 'summation'")
 
 
+def _resolve_few_model(model, lmax, nmax, force_backend):
+    """Return an instantiated FEW mode-resolved waveform model.
+
+    ``model`` is either the name of a class in :mod:`few.waveform` or an
+    already-instantiated FEW waveform object (returned unchanged).
+    """
+
+    if not isinstance(model, str):
+        return model
+    from few.waveform import waveform as few_waveform
+
+    model_cls = getattr(few_waveform, model, None)
+    if model_cls is None:
+        raise ValueError(f"unknown FEW waveform model {model!r}")
+    try:
+        return model_cls(lmax=lmax, nmax=nmax, force_backend=force_backend)
+    except TypeError:
+        # Models that do not take lmax/nmax (e.g. Waveform1PAT1R) select modes
+        # through a mode selector instead.
+        return model_cls(force_backend=force_backend)
+
+
 def generate_relativistic_mode_waveform(
     M: float,
     mu: float,
@@ -332,14 +354,22 @@ def generate_relativistic_mode_waveform(
     max_teukolsky_modes: Optional[int] = None,
     interpolation_chunk_size: int = 256,
     force_backend: str = "cpu",
+    model: "str | object" = "FastKerrEccentricEquatorialFlux",
 ) -> RelativisticModeWaveform:
-    """Generate full-sky modes with FEW's relativistic Kerr flux model.
+    r"""Generate full-sky modes with a FEW mode-resolved waveform model.
 
-    This follows :class:`few.waveform.FastKerrEccentricEquatorialFlux` exactly:
-    a relativistic Kerr flux trajectory supplies the phases, the Teukolsky
-    interpolant supplies complex ``(l,m,n)`` amplitudes, and the radial
-    harmonics are combined into uniformly sampled ``(l,m)`` modes.  With the
-    default ``power_fraction=1`` and no mode cap, all available modes are used.
+    A FEW trajectory supplies the phases, the model's amplitude module supplies
+    complex ``(l,m,n)`` amplitudes, and the harmonics are combined into
+    uniformly sampled ``(l,m)`` modes.  With the default ``power_fraction=1``
+    and no mode cap, all available modes are used.
+
+    ``model`` selects the FEW waveform model. It may be the name of a class in
+    :mod:`few.waveform` (default ``"FastKerrEccentricEquatorialFlux"``) or an
+    already-instantiated FEW waveform object, which lets you configure a model
+    however you like before handing it in. Any mode-resolved
+    ``SphericalHarmonicWaveformBase`` model is supported, including the flux
+    family and the post-adiabatic ``Waveform1PAT1R`` (a circular model that
+    evolves the primary's mass and spin).
 
     ``power_fraction`` and ``max_teukolsky_modes`` are optional rendering-speed
     controls.  Selection is based on sky-integrated mode power, including the
@@ -360,13 +390,8 @@ def generate_relativistic_mode_waveform(
     from scipy.interpolate import CubicSpline
 
     from few.utils.constants import Gpc, MRSUN_SI
-    from few.waveform.waveform import FastKerrEccentricEquatorialFlux
 
-    generator = FastKerrEccentricEquatorialFlux(
-        lmax=lmax,
-        nmax=nmax,
-        force_backend=force_backend,
-    )
+    generator = _resolve_few_model(model, lmax, nmax, force_backend)
     a, xI0 = generator.sanity_check_init(M, mu, a, p0, e0, xI0)
     trajectory = generator.inspiral_generator(
         M,
@@ -382,16 +407,43 @@ def generate_relativistic_mode_waveform(
         dt=dt,
         **generator.inspiral_kwargs,
     )
-    t_sparse, p, e, xI, _, _, _ = (_as_numpy(value) for value in trajectory)
-    generator.sanity_check_traj(a, p, e, xI)
-
     amplitude_generator = generator.amplitude_generator
-    amplitudes = _as_numpy(amplitude_generator(a, p, e, xI0))
+
+    # Post-adiabatic models (Trajectory1PAT1R) also evolve the primary's mass
+    # and spin, so the trajectory carries two extra columns and the amplitudes
+    # depend on the instantaneous spin; the flux family does not.
+    evolves_primary = (
+        type(generator.inspiral_generator.func).__name__ == "Trajectory1PAT1R"
+    )
+    if evolves_primary:
+        t_sparse, p, e, xI, _, _, _, delta_m1, chit = (
+            _as_numpy(value) for value in trajectory
+        )
+        ode_args = generator.inspiral_generator.func.args
+        chit = chit + float(ode_args["chit1"])  # stored as delta chit1
+        generator.sanity_check_traj(a, p, e, xI)
+        amplitudes = _as_numpy(
+            amplitude_generator.get_amplitudes(
+                a,
+                p,
+                e,
+                xI,
+                nu=float(ode_args["nu"]),
+                chit2=float(ode_args["chit2"]),
+                chit=chit,
+                delta_m1=delta_m1,
+            )
+        )
+    else:
+        t_sparse, p, e, xI, _, _, _ = (_as_numpy(value) for value in trajectory)
+        generator.sanity_check_traj(a, p, e, xI)
+        amplitudes = _as_numpy(amplitude_generator(a, p, e, xI0))
+
     # Label the amplitude columns from the amplitude module's own index arrays,
     # not the outer generator's. The amplitude model is trained to a fixed
-    # ``nmax`` (currently 55), so a larger requested ``nmax`` leaves the
-    # generator's ``*_arr_no_mask`` describing more modes than the amplitude
-    # module actually returns, and the two no longer line up.
+    # ``nmax``, so a larger requested ``nmax`` leaves the generator's
+    # ``*_arr_no_mask`` describing more modes than the amplitude module actually
+    # returns, and the two no longer line up.
     ell_all = _as_numpy(amplitude_generator.l_arr_no_mask).astype(
         np.int32, copy=False
     )
@@ -408,7 +460,9 @@ def generate_relativistic_mode_waveform(
             f"({ell_all.shape[0]} labels for {available} modes)"
         )
     amplitude_nmax = int(np.abs(n_all).max())
-    if nmax > amplitude_nmax:
+    # Only meaningful for eccentric models that use radial harmonics; a circular
+    # model (amplitude_nmax == 0) has no radial overtones to cap.
+    if amplitude_nmax > 0 and nmax > amplitude_nmax:
         warnings.warn(
             f"The amplitude model is trained to nmax={amplitude_nmax}, so the "
             f"requested nmax={nmax} was capped; {available} Teukolsky modes "
@@ -497,6 +551,7 @@ def generate_relativistic_mode_waveform(
         primary_mass=float(M),
         secondary_mass=float(mu),
         spin=float(a),
+        model=type(generator).__name__,
     )
 
 

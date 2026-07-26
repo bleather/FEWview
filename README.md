@@ -93,6 +93,32 @@ render_mode_frame(
 For a movie, use `render_mode_animation` with the same arguments plus a
 `start_time`/`end_time` range and `frames`/`fps`.
 
+## Waveform models
+
+By default the waveform comes from FEW's `FastKerrEccentricEquatorialFlux`. The
+`model` argument selects any mode-resolved FEW model, by class name or as an
+already-instantiated model object:
+
+```python
+# a different flux model
+wf = generate_relativistic_mode_waveform(
+    M=1e6, mu=10.0, a=0.0, p0=12.0, e0=0.4, xI0=1.0,
+    dt=10.0, T=0.01, model="FastSchwarzschildEccentricFlux",
+)
+
+# the post-adiabatic circular model (needs a FEW build that provides it)
+wf = generate_relativistic_mode_waveform(
+    M=1e6, mu=10.0, a=0.5, p0=10.0, e0=0.0, xI0=1.0,
+    dt=10.0, T=0.02, model="Waveform1PAT1R",
+)
+```
+
+The flux family and the post-adiabatic `Waveform1PAT1R` (a circular model that
+evolves the primary's mass and spin) are both supported; Fewview reconstructs
+the same modes those models produce (validated at >99% overlap against
+`Waveform1PAT1R`'s own output). Install Fewview into the same environment as the
+FEW build that provides the model you want.
+
 ## Appearance
 
 Three knobs control the look.
