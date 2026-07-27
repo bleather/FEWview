@@ -40,6 +40,12 @@ A few stills produced with Fewview, across colour palettes and camera views.
     <td align="center"><code>plasma</code>, face-on</td>
     <td align="center"><code>magma</code>, face-on</td>
   </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/images/gallery-flux-plasma.png" alt="energy flux, oblique view" width="50%"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">energy flux (<code>energy_flux</code> + <code>flux</code> profile), oblique — the bright polar flux lobes with the equatorial null showing through</td>
+  </tr>
 </table>
 
 ## Installation
@@ -135,8 +141,11 @@ Three knobs control the look.
 
 **Opacity profile** — how values map to transparency: `soft` (broad fronts,
 the default), `bands` (symmetric levels), `shells` (nested translucent
-signed-strain sheets; needs `plus`/`cross`), `flux` (log-compressed energy
-flux; needs `energy_flux`).
+signed-strain sheets; needs `plus`/`cross`), `flux` (threshold-gated
+energy-flux shells that keep the dim troughs transparent; needs `energy_flux`,
+and reads best with `presentation="shells_dramatic"`). The `flux` look is tuned
+with `flux_threshold` (how bright a crest must be to become solid) and
+`flux_gamma` (how much the dim inter-crest flux is lifted).
 
 **Colour scheme** — any Matplotlib colormap (`magma`, `viridis`, `plasma`,
 `inferno`, `cividis`, `cool`, `blues`) plus three tuned palettes: `rainbow`,

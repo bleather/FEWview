@@ -107,12 +107,36 @@ fv.render_mode_frame(
 )
 ```
 
-For energy flux instead of strain, set `component="energy_flux"` with
-`opacity_profile="flux"`, which logarithmically compresses $|\dot h|^2$ so
-faint, broad emission stays visible. It reads best at higher eccentricity,
-where the flux develops strong spiral structure.
+## 5. A different field: energy flux
 
-## 5. Diagnostic slice
+The looks above render the strain (`component="plus"`), but Fewview can also
+show the outgoing energy flux $|\dot h|^2$. Pair `component="energy_flux"` with
+`opacity_profile="flux"`: the profile keeps the dim troughs between wavefronts
+transparent and lets only the bright crests turn solid, so the flux reads as a
+set of nested luminous shells with the equatorial null showing through instead
+of a filled ball. It looks best with `presentation="shells_dramatic"` and an
+oblique camera, and the structure is strongest at higher eccentricity.
+
+```python
+fv.render_mode_frame(
+    waveform, screenshot="tutorial-flux.png",
+    max_delay=max_delay, frame_time=end,
+    waveform_start_time=end - 8 * period, waveform_end_time=end,
+    resolution=200,
+    component="energy_flux", opacity_profile="flux", color_scheme="plasma",
+    presentation="shells_dramatic", color_exposure=2.2,
+    camera_view="oblique", camera_zoom=0.62, smooth_sigma=0.7,
+    inner_window_fraction=0.10, outer_window_fraction=0.10,
+    trajectory_color="#00e0ff", window_size=(900, 900),
+)
+```
+
+Two knobs tune the flux look: `flux_threshold` sets how bright a crest must be
+before it becomes solid (raise it to isolate the brightest lobes), and
+`flux_gamma` lifts the dim inter-crest flux into the bright half of the colour
+map. The defaults (`0.35` and `0.6`) are tuned for these EMRI fluxes.
+
+## 6. Diagnostic slice
 
 Before a full render, a coordinate-plane slice is a fast way to inspect the
 field:
@@ -125,7 +149,7 @@ volume = fv.build_mode_retarded_time_volume(
 fig, _ = fv.plot_volume_slice(volume, component="plus", plane="xz")
 ```
 
-## 6. A short animation
+## 7. A short animation
 
 `render_mode_animation` sweeps a range of frame times to an MP4, reusing the
 angular basis across frames and holding the colour scale fixed so the movie does
@@ -151,6 +175,26 @@ fv.render_mode_animation(
 `--animation-cycles` (via `start_time`/`end_time` here) sets how much inspiral
 is traversed; the frame count sets how smoothly. Aim for at least ~20 frames per
 wave cycle, or the wave pattern strobes.
+
+The same call renders the energy flux in motion. The `flux` profile
+self-normalizes each frame (a single fixed colour scale would be dominated by
+the periapsis burst and blank the quieter frames), so the outgoing flux shells
+stay visible as they propagate outward:
+
+```python
+fv.render_mode_animation(
+    waveform, "tutorial-flux.mp4",
+    max_delay=max_delay, start_time=anim_start, end_time=anim_end,
+    frames=30, fps=15, resolution=120,
+    component="energy_flux", opacity_profile="flux", color_scheme="plasma",
+    presentation="shells_dramatic", color_exposure=2.2,
+    camera_view="oblique", camera_zoom=0.62, smooth_sigma=0.7,
+    inner_window_fraction=0.10, outer_window_fraction=0.10,
+    trajectory_color="#00e0ff",
+    show_bodies=True, show_trajectory=True, show_waveform=True,
+    window_size=(700, 640),
+)
+```
 
 ## Choosing settings
 

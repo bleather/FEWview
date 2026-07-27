@@ -81,9 +81,10 @@ _SECONDARY_BODY_SCALE = 0.33
 
 
 # Default max opacity when the caller does not set one. The nested translucent
-# ``shells`` sheets need more than the broad ``soft``/``bands``/``flux`` fronts
-# to read at a comparable brightness.
+# ``shells`` sheets and the threshold-gated ``flux`` crests both need more than
+# the broad ``soft``/``bands`` fronts to read at a comparable brightness.
 _SHELLS_DEFAULT_OPACITY = 0.30
+_FLUX_DEFAULT_OPACITY = 0.55
 _DEFAULT_OPACITY = 0.11
 
 
@@ -92,7 +93,11 @@ def _resolve_opacity(opacity, opacity_profile):
 
     if opacity is not None:
         return opacity
-    return _SHELLS_DEFAULT_OPACITY if opacity_profile == "shells" else _DEFAULT_OPACITY
+    if opacity_profile == "shells":
+        return _SHELLS_DEFAULT_OPACITY
+    if opacity_profile == "flux":
+        return _FLUX_DEFAULT_OPACITY
+    return _DEFAULT_OPACITY
 
 
 def paper_style_file() -> str:
@@ -1658,6 +1663,8 @@ def render_volume(
     shell_width: float = 0.075,
     shell_opacity_floor: float = 0.16,
     shell_glow: float = 0.12,
+    flux_gamma: float = 0.6,
+    flux_threshold: float = 0.35,
     smooth_sigma: float = 0.65,
     opacity_unit_distance: Optional[float] = None,
     window_size: tuple[int, int] = (1600, 900),
@@ -1674,8 +1681,10 @@ def render_volume(
     The default ``"cinematic"`` style uses direct shaded volume rendering,
     smooth scalar interpolation, a dark background, and a presentation camera.
     ``opacity_profile="shells"`` exposes positive signed-strain crests in narrow
-    coloured bands. ``opacity_profile="flux"`` logarithmically compresses the
-    energy-flux proxy and gives it a broad opacity ramp. Unlike a stack of
+    coloured bands. ``opacity_profile="flux"`` gates opacity on the energy-flux
+    crests so the outgoing flux shells read as luminous sheets with the
+    equatorial null showing through; it looks best with ``component="energy_flux"``,
+    ``presentation="shells_dramatic"``, and an oblique camera. Unlike a stack of
     extracted contour meshes, the translucent wavefronts remain continuous
     when viewed obliquely.
 
@@ -1706,6 +1715,12 @@ def render_volume(
         shell_width: Normalized decay width behind each shell.
         shell_opacity_floor: First-shell opacity as a fraction of ``opacity``.
         shell_glow: Fractional soft halo added around each shell.
+        flux_gamma: ``flux`` profile only. Power applied to the normalized flux
+            before display. Values below one lift the dim inter-crest troughs
+            into the bright half of the colour map. Default ``0.6``.
+        flux_threshold: ``flux`` profile only. Normalized flux below which the
+            volume stays transparent, so only the bright crests read as shells.
+            Default ``0.35``; raise it to isolate the brightest lobes.
         smooth_sigma: Gaussian smoothing in voxel units for display only.
         opacity_unit_distance: Physical distance over which opacity accumulates.
             The default is four percent of the volume radius, so changing the
@@ -1788,6 +1803,7 @@ def render_volume(
             display_field,
             component,
             opacity_profile=opacity_profile,
+            flux_gamma=flux_gamma,
         )
         render_name = f"{component}_render"
         grid.point_data[render_name] = display_field.ravel(order="F")
@@ -1803,6 +1819,7 @@ def render_volume(
             shell_width=shell_width,
             shell_opacity_floor=shell_opacity_floor,
             shell_glow=shell_glow,
+            flux_threshold=flux_threshold,
         )
         actor = plotter.add_volume(
             grid,
@@ -2313,6 +2330,8 @@ def render_mode_frame(
     shell_width: float = 0.075,
     shell_opacity_floor: float = 0.16,
     shell_glow: float = 0.12,
+    flux_gamma: float = 0.6,
+    flux_threshold: float = 0.35,
     smooth_sigma: float = 0.65,
     opacity_unit_distance: Optional[float] = None,
     window_size: tuple[int, int] = (1280, 720),
@@ -2474,6 +2493,8 @@ def render_mode_frame(
         shell_width=shell_width,
         shell_opacity_floor=shell_opacity_floor,
         shell_glow=shell_glow,
+        flux_gamma=flux_gamma,
+        flux_threshold=flux_threshold,
         smooth_sigma=smooth_sigma,
         opacity_unit_distance=opacity_unit_distance,
         window_size=main_window_size,
@@ -2566,6 +2587,8 @@ def render_mode_animation(
     shell_width: float = 0.075,
     shell_opacity_floor: float = 0.16,
     shell_glow: float = 0.12,
+    flux_gamma: float = 0.6,
+    flux_threshold: float = 0.35,
     smooth_sigma: float = 0.65,
     opacity_unit_distance: Optional[float] = None,
     window_size: tuple[int, int] = (1280, 720),
@@ -2616,6 +2639,10 @@ def render_mode_animation(
     omitted, a robust common scale is measured at ``normalization_samples``
     times spanning that global interval.  This avoids clipping stronger late
     inspiral frames against the first frame's scale.
+    The ``flux`` opacity profile is the exception: because it gates opacity on a
+    per-frame threshold and :math:`|\dot h|^2` spikes at periapsis, a single
+    common scale would blank the quieter frames, so each flux frame is
+    self-normalized instead (``normalization_samples`` is then unused).
     For energy flux, ``flux_mode_combination="incoherent"`` removes modal
     cross terms and therefore suppresses rapidly rotating angular lobes.
     """
@@ -2758,30 +2785,41 @@ def render_mode_animation(
         model=waveform.model,
         mode_count=waveform.modes.shape[1],
     )
-    render_scales = []
-    for normalization_frame in normalization_frames:
-        if np.isclose(
-            normalization_frame,
-            float(frame_times[0]),
-            rtol=0.0,
-            atol=np.finfo(float).eps * max(1.0, abs(float(frame_times[0]))),
-        ):
-            normalization_field = first_field
-        else:
-            normalization_field = _component_from_mode_sampling(
-                sampling,
-                frame_time=float(normalization_frame),
-                max_delay=max_delay,
-                component=component,
-                flux_mode_combination=flux_mode_combination,
+    # The flux profile gates opacity on a per-frame threshold, and |dh/dt|^2
+    # spikes sharply at periapsis. A single common scale (the max over the
+    # sample frames) would be set by one burst and push every quieter frame
+    # below the threshold, blanking most of the movie. So the flux profile
+    # self-normalizes each frame instead, keeping the outgoing shells visible
+    # throughout; ``render_scale = None`` selects that per-frame path below.
+    if opacity_profile == "flux":
+        render_scale = None
+    else:
+        render_scales = []
+        for normalization_frame in normalization_frames:
+            if np.isclose(
+                normalization_frame,
+                float(frame_times[0]),
+                rtol=0.0,
+                atol=np.finfo(float).eps * max(1.0, abs(float(frame_times[0]))),
+            ):
+                normalization_field = first_field
+            else:
+                normalization_field = _component_from_mode_sampling(
+                    sampling,
+                    frame_time=float(normalization_frame),
+                    max_delay=max_delay,
+                    component=component,
+                    flux_mode_combination=flux_mode_combination,
+                )
+            normalization_field = _smooth_render_field(
+                normalization_field, smooth_sigma
             )
-        normalization_field = _smooth_render_field(
-            normalization_field, smooth_sigma
-        )
-        render_scales.append(_render_field_scale(normalization_field, component))
-        if normalization_field is not first_field:
-            del normalization_field
-    render_scale = max(render_scales)
+            render_scales.append(
+                _render_field_scale(normalization_field, component)
+            )
+            if normalization_field is not first_field:
+                del normalization_field
+        render_scale = max(render_scales)
     plotter = render_volume(
         first_volume,
         component=component,
@@ -2798,6 +2836,8 @@ def render_mode_animation(
         shell_width=shell_width,
         shell_opacity_floor=shell_opacity_floor,
         shell_glow=shell_glow,
+        flux_gamma=flux_gamma,
+        flux_threshold=flux_threshold,
         smooth_sigma=smooth_sigma,
         opacity_unit_distance=opacity_unit_distance,
         window_size=main_window_size,
@@ -2890,6 +2930,7 @@ def render_mode_animation(
                 component,
                 scale=render_scale,
                 opacity_profile=opacity_profile,
+                flux_gamma=flux_gamma,
             )
             render_array[:] = display_field.ravel(order="F")
             render_array.VTKObject.Modified()
@@ -3032,6 +3073,7 @@ def _normalize_render_field(
     *,
     scale: Optional[float] = None,
     opacity_profile: VolumeOpacityProfile = "soft",
+    flux_gamma: float = 0.6,
 ) -> tuple[np.ndarray, tuple[float, float]]:
     if scale is None:
         scale = _render_field_scale(field, component)
@@ -3044,19 +3086,20 @@ def _normalize_render_field(
     if opacity_profile == "shells":
         return np.clip(field / scale, 0.0, 1.0), (0.0, 1.0)
 
-    # The flux profile displays a logarithmic energy flux. Four decades keep
-    # faint, spatially broad emission visible instead of restricting the render
-    # to the thinnest peak-flux shells.
+    # The flux profile renders the coherent energy flux |dh/dt|^2, which spans
+    # a huge spatial range: it plunges toward zero twice per wave cycle and so
+    # sits near its floor almost everywhere, spiking only on the outgoing
+    # crests. A ``flux_gamma`` below one lifts those low values into the bright
+    # half of the colour map, so the crests read as luminous shells rather than
+    # a dim ball. The opacity transfer function then gates on this same value,
+    # keeping the troughs transparent.
     if opacity_profile == "flux":
+        if flux_gamma <= 0.0:
+            raise ValueError("flux_gamma must be positive")
         scaled = np.clip(field / scale, 0.0, 1.0)
-        decades = 4.0
-        floor = 10.0 ** (-decades)
-        compressed = np.zeros_like(scaled)
-        positive = scaled > floor
-        compressed[positive] = (
-            np.log10(scaled[positive]) + decades
-        ) / decades
-        return np.clip(compressed, 0.0, 1.0), (0.0, 1.0)
+        if flux_gamma != 1.0:
+            scaled = scaled ** flux_gamma
+        return np.clip(scaled, 0.0, 1.0), (0.0, 1.0)
 
     if component in ("amplitude", "energy_flux"):
         return np.clip(field / scale, 0.0, 1.0), (
@@ -3091,8 +3134,9 @@ def _wavefront_opacity_transfer(
     shell_width: float = 0.075,
     shell_opacity_floor: float = 0.16,
     shell_glow: float = 0.12,
+    flux_threshold: float = 0.35,
 ) -> np.ndarray:
-    """Build generic, layered signed-strain, or logarithmic flux opacity maps."""
+    """Build generic, layered signed-strain, or threshold-gated flux opacity maps."""
 
     if profile == "shells":
         if shell_count < 2:
@@ -3146,14 +3190,17 @@ def _wavefront_opacity_transfer(
         )
 
     if profile == "flux":
+        if not 0.0 <= flux_threshold < 1.0:
+            raise ValueError("flux_threshold must be in the interval [0, 1)")
         values = np.linspace(0.0, 1.0, n_colors)
-        # The input has already been compressed logarithmically. A broad,
-        # saturating opacity ramp lets colour carry the power variation. Strong
-        # angular lobes therefore remain bright without also becoming much more
-        # solid than the surrounding radiation.
-        visibility = _smoothstep((values - 0.015) / 0.20)
-        plateau = 0.78 + 0.22 * _smoothstep((values - 0.20) / 0.55)
-        alpha = maximum_opacity * visibility * plateau
+        # Gate opacity on the (already ``flux_gamma``-lifted) value: the dim
+        # troughs between wavefronts stay transparent while the bright crests
+        # become solid. This turns the volume-filling ball into a set of nested
+        # luminous flux shells with the equatorial null showing through. A soft
+        # edge keeps the shells from aliasing into hard contour lines.
+        softness = max(1.0 - flux_threshold, 1e-3) * 0.4
+        visibility = _smoothstep((values - flux_threshold) / softness)
+        alpha = maximum_opacity * visibility ** 1.1
         return np.asarray(
             np.clip(255.0 * alpha, 0.0, 255.0), dtype=np.uint8
         )

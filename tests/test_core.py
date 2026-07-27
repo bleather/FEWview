@@ -10,6 +10,7 @@ from fewview._core import (
     _normalize_render_field,
     _prepare_display_trajectory,
     _resolve_body_radii,
+    _resolve_opacity,
     _resolve_opacity_unit_distance,
     _resolve_volume_presentation,
     _smooth_render_field,
@@ -246,7 +247,7 @@ class VisualizationTest(unittest.TestCase):
         self.assertEqual(opacity[0], 0)
         self.assertGreater(int(np.max(opacity)), 0)
 
-    def test_flux_profile_logarithmically_expands_flux(self):
+    def test_flux_profile_gamma_lifts_and_threshold_gates(self):
         field = np.array([0.0, 1.0e-4, 1.0e-2, 1.0])
         display, limits = _normalize_render_field(
             field,
@@ -255,19 +256,47 @@ class VisualizationTest(unittest.TestCase):
             opacity_profile="flux",
         )
 
-        np.testing.assert_allclose(display, [0.0, 0.0, 0.5, 1.0])
+        # ``flux_gamma`` below one lifts the dim inter-crest values into the
+        # bright half of the colour map while the crest stays at 1 and the
+        # floor stays at 0.
+        np.testing.assert_allclose(display, field ** 0.6, rtol=1e-6)
+        self.assertEqual(display[0], 0.0)
+        self.assertEqual(display[-1], 1.0)
+        self.assertGreater(display[1], field[1])
         self.assertEqual(limits, (0.0, 1.0))
+
         opacity = _wavefront_opacity_transfer(
             "energy_flux",
             n_colors=512,
-            maximum_opacity=0.2,
+            maximum_opacity=0.5,
             profile="flux",
         )
-        self.assertEqual(opacity[0], 0)
-        self.assertGreater(int(opacity[256]), 0)
-        # Once visible, power is carried primarily by colour rather than a
-        # rapidly increasing opacity that can resemble a solid protrusion.
-        self.assertLess(float(opacity[-1]) / float(opacity[256]), 1.35)
+        values = np.linspace(0.0, 1.0, 512)
+        # The threshold gate keeps the dim troughs transparent while the bright
+        # crests turn solid; this is what turns a filled ball into flux shells.
+        self.assertEqual(int(opacity[0]), 0)
+        self.assertEqual(int(opacity[np.searchsorted(values, 0.20)]), 0)
+        self.assertGreater(int(opacity[np.searchsorted(values, 0.70)]), 0)
+        self.assertTrue(np.all(np.diff(opacity.astype(int)) >= 0))
+        self.assertGreaterEqual(int(opacity[-1]), int(0.5 * 255) - 1)
+
+    def test_flux_profile_threshold_and_gamma_validation(self):
+        with self.assertRaisesRegex(ValueError, "flux_gamma"):
+            _normalize_render_field(
+                np.array([0.0, 1.0]), "energy_flux", scale=1.0,
+                opacity_profile="flux", flux_gamma=0.0,
+            )
+        with self.assertRaisesRegex(ValueError, "flux_threshold"):
+            _wavefront_opacity_transfer(
+                "energy_flux", n_colors=64, maximum_opacity=0.5,
+                profile="flux", flux_threshold=1.0,
+            )
+
+    def test_flux_profile_has_a_higher_default_opacity(self):
+        self.assertAlmostEqual(_resolve_opacity(None, "flux"), 0.55)
+        self.assertAlmostEqual(_resolve_opacity(None, "shells"), 0.30)
+        self.assertAlmostEqual(_resolve_opacity(None, "soft"), 0.11)
+        self.assertAlmostEqual(_resolve_opacity(0.42, "flux"), 0.42)
 
     def test_opacity_accumulation_distance_is_resolution_independent(self):
         self.assertAlmostEqual(_resolve_opacity_unit_distance(2.5, None), 0.1)
