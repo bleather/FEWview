@@ -87,6 +87,8 @@ render_mode_frame(
     component="plus",
     opacity_profile="shells",
     color_scheme="rainbow",
+    presentation="shells_dramatic",
+    opacity=0.30,
 )
 ```
 
