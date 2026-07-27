@@ -43,7 +43,7 @@ from .colormaps import (
     PRESENTATIONS,
     available_color_schemes,
 )
-from .plotting import plot_volume_slice
+from .plotting import paper_style_file, plot_volume_slice
 from .rendering import (
     DEFAULT_TRAJECTORY_COLOR,
     render_mode_animation,
@@ -91,6 +91,7 @@ __all__ = [
     "DEFAULT_TRAJECTORY_COLOR",
     # plotting
     "plot_volume_slice",
+    "paper_style_file",
     # colormaps
     "available_color_schemes",
     "OPACITY_PROFILES",

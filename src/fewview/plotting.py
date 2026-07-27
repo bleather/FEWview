@@ -7,6 +7,6 @@ field before committing to a full volume render.
 
 from __future__ import annotations
 
-from ._core import plot_volume_slice
+from ._core import paper_style_file, plot_volume_slice
 
-__all__ = ["plot_volume_slice"]
+__all__ = ["plot_volume_slice", "paper_style_file"]

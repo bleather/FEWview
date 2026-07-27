@@ -80,6 +80,42 @@ DEFAULT_TRAJECTORY_COLOR = "#ffd36a"
 _SECONDARY_BODY_SCALE = 0.33
 
 
+def paper_style_file() -> str:
+    """Return the path to Fewview's bundled LaTeX (Computer Modern) mplstyle.
+
+    Fewview's Matplotlib figures use it by default. Apply it to your own plots
+    for a matching look::
+
+        import matplotlib.pyplot as plt
+        import fewview
+
+        plt.style.use(fewview.paper_style_file())
+
+    It relies on Matplotlib's bundled ``cmr10`` font and ``cm`` mathtext, so no
+    LaTeX installation is required.
+    """
+
+    return str(Path(__file__).resolve().parent / "styles" / "fewview-paper.mplstyle")
+
+
+# Font rcParams for the LaTeX look, used where a full stylesheet would fight the
+# element's own layout (the waveform panel). Mirrors the bundled stylesheet's
+# Computer Modern choice; falls back gracefully if cmr10 is unavailable.
+_LATEX_FONT_RC = {
+    "font.family": "serif",
+    "font.serif": ["cmr10", "Computer Modern Roman", "STIXGeneral", "DejaVu Serif"],
+    "mathtext.fontset": "cm",
+    "axes.formatter.use_mathtext": True,
+    "axes.unicode_minus": False,
+    "text.usetex": False,
+}
+
+# Panel width (px) the absolute font/line sizes below were tuned at; sizes scale
+# linearly with the rendered panel height relative to this so labels keep the
+# same visual fraction at any resolution (e.g. 4K).
+_PANEL_REFERENCE_HEIGHT = 158.0
+
+
 @dataclass(frozen=True)
 class _ResolvedVolumePresentation:
     """Concrete display settings after applying a presentation preset."""
@@ -1274,10 +1310,31 @@ def plot_strain_surface(
 ):
     """Plot a :class:`StrainSurface` with Matplotlib.
 
+    When Fewview creates the figure (``ax`` is ``None``) it applies the bundled
+    LaTeX paper style; pass your own ``ax`` to keep your figure's styling.
+
     Returns:
         ``(figure, axes)`` so callers can further customize or save the plot.
     """
 
+    import contextlib
+
+    import matplotlib.pyplot as plt
+
+    with (
+        plt.style.context(paper_style_file())
+        if ax is None
+        else contextlib.nullcontext()
+    ):
+        return _plot_strain_surface_body(
+            surface, ax=ax, cmap=cmap, colorbar=colorbar,
+            view_elevation=view_elevation, view_azimuth=view_azimuth,
+        )
+
+
+def _plot_strain_surface_body(
+    surface, *, ax, cmap, colorbar, view_elevation, view_azimuth
+):
     import matplotlib.pyplot as plt
     from matplotlib.cm import ScalarMappable
     from matplotlib.colors import Normalize
@@ -1330,13 +1387,32 @@ def plot_volume_slice(
     cmap: str = "coolwarm",
     colorbar: bool = True,
 ):
-    """Plot a central slice through a retarded-time volume with Matplotlib."""
+    """Plot a central slice through a retarded-time volume with Matplotlib.
+
+    When Fewview creates the figure (``ax`` is ``None``) it applies the bundled
+    LaTeX paper style; pass your own ``ax`` to keep your figure's styling.
+    """
+
+    import contextlib
 
     import matplotlib.pyplot as plt
-    from matplotlib.colors import Normalize
 
     if plane not in ("xy", "xz", "yz"):
         raise ValueError("plane must be 'xy', 'xz', or 'yz'")
+    with (
+        plt.style.context(paper_style_file())
+        if ax is None
+        else contextlib.nullcontext()
+    ):
+        return _plot_volume_slice_body(
+            volume, component=component, plane=plane, ax=ax, cmap=cmap, colorbar=colorbar
+        )
+
+
+def _plot_volume_slice_body(volume, *, component, plane, ax, cmap, colorbar):
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import Normalize
+
     field = volume.component(component)
     display_name = component.replace("_", " ")
     if plane == "xy":
@@ -2073,17 +2149,12 @@ class _WaveformPanelRenderer:
 
         self.font_style = font_style
         self.style_file = None if style_file is None else str(Path(style_file))
-        self.font_rc = (
-            {
-                "font.family": "serif",
-                "font.serif": ["STIXGeneral"],
-                "mathtext.fontset": "stix",
-                "mathtext.default": "regular",
-                "text.usetex": False,
-            }
-            if font_style == "latex"
-            else {"text.usetex": False}
-        )
+        self.font_rc = dict(_LATEX_FONT_RC) if font_style == "latex" else {"text.usetex": False}
+        # Scale font and line sizes so labels keep a constant fraction of the
+        # panel at any resolution; a 4K panel is ~3x taller than the reference,
+        # so its text is ~3x larger in points and stays readable.
+        fs = max(height / _PANEL_REFERENCE_HEIGHT, 0.75)
+        self.fs = fs
 
         reference = waveform.strain(theta=theta, phi=phi)
         h_plus = np.real(reference)
@@ -2107,19 +2178,19 @@ class _WaveformPanelRenderer:
             self.canvas = FigureCanvasAgg(figure)
             self.axis = figure.add_axes((0.055, 0.27, 0.92, 0.66))
             self.axis.set_facecolor(background_color)
-            self.axis.axhline(0.0, color="#20313a", linewidth=0.7, zorder=0)
+            self.axis.axhline(0.0, color="#20313a", linewidth=0.7 * fs, zorder=0)
             self.axis.plot(
                 self.relative_time,
                 self.h_plus,
                 color="#245464",
-                linewidth=0.85,
+                linewidth=0.85 * fs,
                 alpha=0.72,
             )
             (self.active_line,) = self.axis.plot(
-                [], [], color="#7cecff", linewidth=1.35
+                [], [], color="#7cecff", linewidth=1.35 * fs
             )
             self.marker = self.axis.axvline(
-                0.0, color="#ffd66d", linewidth=1.1, alpha=0.95
+                0.0, color="#ffd66d", linewidth=1.1 * fs, alpha=0.95
             )
             self.time_label = self.axis.text(
                 0.995,
@@ -2129,7 +2200,7 @@ class _WaveformPanelRenderer:
                 color="#dfeef2",
                 ha="right",
                 va="top",
-                fontsize=8.5,
+                fontsize=8.5 * fs,
             )
             waveform_label = (
                 r"$h_+\;\mathrm{(normalised)}$"
@@ -2144,7 +2215,7 @@ class _WaveformPanelRenderer:
                 color="#dfeef2",
                 ha="left",
                 va="top",
-                fontsize=8.5,
+                fontsize=8.5 * fs,
             )
             self.axis.set_xlim(0.0, end_time - start_time)
             self.axis.set_ylim(-1.12, 1.12)
@@ -2157,20 +2228,20 @@ class _WaveformPanelRenderer:
             self.axis.set_xlabel(
                 xlabel,
                 color="#91a8af",
-                fontsize=8,
-                labelpad=2,
+                fontsize=8 * fs,
+                labelpad=2 * fs,
             )
             self.axis.tick_params(
                 axis="x",
                 colors="#718991",
-                labelsize=7.5,
-                length=2.5,
-                width=0.6,
+                labelsize=7.5 * fs,
+                length=2.5 * fs,
+                width=0.6 * fs,
             )
             for side in ("left", "right", "top"):
                 self.axis.spines[side].set_visible(False)
             self.axis.spines["bottom"].set_color("#38515a")
-            self.axis.spines["bottom"].set_linewidth(0.7)
+            self.axis.spines["bottom"].set_linewidth(0.7 * fs)
 
     def _style_context(self, mpl):
         if self.style_file is not None:
