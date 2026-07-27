@@ -88,7 +88,6 @@ render_mode_frame(
     opacity_profile="shells",
     color_scheme="rainbow",
     presentation="shells_dramatic",
-    opacity=0.30,
 )
 ```
 

@@ -80,6 +80,21 @@ DEFAULT_TRAJECTORY_COLOR = "#ffd36a"
 _SECONDARY_BODY_SCALE = 0.33
 
 
+# Default max opacity when the caller does not set one. The nested translucent
+# ``shells`` sheets need more than the broad ``soft``/``bands``/``flux`` fronts
+# to read at a comparable brightness.
+_SHELLS_DEFAULT_OPACITY = 0.30
+_DEFAULT_OPACITY = 0.11
+
+
+def _resolve_opacity(opacity, opacity_profile):
+    """Return the max opacity, applying a profile-aware default when unset."""
+
+    if opacity is not None:
+        return opacity
+    return _SHELLS_DEFAULT_OPACITY if opacity_profile == "shells" else _DEFAULT_OPACITY
+
+
 def paper_style_file() -> str:
     """Return the path to Fewview's bundled LaTeX (Computer Modern) mplstyle.
 
@@ -1636,7 +1651,7 @@ def render_volume(
     presentation: VolumePresentation = "balanced",
     color_exposure: Optional[float] = None,
     background_color: Optional[str] = None,
-    opacity: float = 0.11,
+    opacity: Optional[float] = None,
     shell_count: int = 7,
     shell_min: float = 0.10,
     shell_max: float = 0.92,
@@ -1682,7 +1697,9 @@ def render_volume(
         color_exposure: Colour-transfer exposure independent of opacity. Values
             above one brighten the palette without making the volume more solid.
         background_color: Optional Matplotlib-compatible render background.
-        opacity: Maximum opacity in the transfer function.
+        opacity: Maximum opacity in the transfer function. ``None`` (the
+            default) applies a profile-aware value: 0.30 for the ``shells``
+            profile, 0.11 otherwise.
         shell_count: Number of translucent positive-strain level sheets.
         shell_min: Normalized strain at the first shell.
         shell_max: Normalized strain at the final shell.
@@ -1709,6 +1726,7 @@ def render_volume(
         The configured ``pyvista.Plotter``.
     """
 
+    opacity = _resolve_opacity(opacity, opacity_profile)
     if not 0.0 < opacity <= 1.0:
         raise ValueError("opacity must be in the interval (0, 1]")
     if style not in ("cinematic", "contours"):
@@ -2288,7 +2306,7 @@ def render_mode_frame(
     presentation: VolumePresentation = "balanced",
     color_exposure: Optional[float] = None,
     background_color: Optional[str] = None,
-    opacity: float = 0.10,
+    opacity: Optional[float] = None,
     shell_count: int = 7,
     shell_min: float = 0.10,
     shell_max: float = 0.92,
@@ -2343,6 +2361,7 @@ def render_mode_frame(
         raise ValueError("screenshot filename must end in .png, .jpg, or .jpeg")
     if image_scale < 1:
         raise ValueError("image_scale must be at least 1")
+    opacity = _resolve_opacity(opacity, opacity_profile)
     if not 0.0 < opacity <= 1.0:
         raise ValueError("opacity must be in the interval (0, 1]")
     if smooth_sigma < 0.0:
@@ -2540,7 +2559,7 @@ def render_mode_animation(
     presentation: VolumePresentation = "balanced",
     color_exposure: Optional[float] = None,
     background_color: Optional[str] = None,
-    opacity: float = 0.10,
+    opacity: Optional[float] = None,
     shell_count: int = 7,
     shell_min: float = 0.10,
     shell_max: float = 0.92,
@@ -2621,6 +2640,7 @@ def render_mode_animation(
         raise ValueError("fps must be positive")
     if image_scale < 1:
         raise ValueError("image_scale must be at least 1")
+    opacity = _resolve_opacity(opacity, opacity_profile)
     if not 0.0 < opacity <= 1.0:
         raise ValueError("opacity must be in the interval (0, 1]")
     if smooth_sigma < 0.0:

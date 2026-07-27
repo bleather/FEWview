@@ -154,7 +154,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.05,
         help="fractional outer-radius taper used to smooth the voxel boundary",
     )
-    display.add_argument("--opacity", type=float, default=0.12)
+    display.add_argument("--opacity", type=float, default=None,
+        help="max opacity; default is profile-aware (0.30 for shells, else 0.11)")
     display.add_argument("--shell-count", type=int, default=7)
     display.add_argument("--shell-min", type=float, default=0.10)
     display.add_argument("--shell-max", type=float, default=0.92)
