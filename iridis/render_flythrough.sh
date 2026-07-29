@@ -14,10 +14,10 @@
 set -euo pipefail
 
 # ---- Iridis / site settings (EDIT THESE) ---------------------------------
-PARTITION="gpu"                    # GPU partition name; list with `sinfo -s`
-ACCOUNT=""                         # Slurm account for the GPU partition ("" = your default)
-CONDA_MODULE="conda/py3-latest"    # find yours with `module avail` (anaconda/miniforge/...)
-CONDA_ENV="fewview"                # env with fewview + FastEMRIWaveforms installed
+PARTITION="a100"                    # GPU partition name; list with `sinfo -s`
+ACCOUNT="normal"                         # Slurm account for the GPU partition ("" = your default)
+CONDA_MODULE=""    # find yours with `module avail` (anaconda/miniforge/...)
+CONDA_ENV="few_env"                # env with fewview + FastEMRIWaveforms installed
 JOBDIR="$HOME/emri/flythrough-job"
 
 # Mode file written by `fewview-render` (arg 1 overrides the default path).
