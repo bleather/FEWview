@@ -152,6 +152,14 @@ with `flux_threshold` (how bright a crest must be to become solid) and
 `aurora`, `cinematic`. `fewview.colormaps.available_color_schemes()` lists
 them all.
 
+**Camera** — `camera_view` picks the `oblique` or `face_on` preset and
+`camera_zoom` frames the sphere. For a specific angle, set an absolute
+`camera_latitude` (degrees above the equatorial plane) and `camera_longitude`
+(azimuth from `+x`); `camera_azimuth`/`camera_elevation` instead nudge the
+preset by a relative offset. In `render_mode_animation` the camera can fly:
+give `camera_latitude_end`/`camera_longitude_end` and it travels there by the
+final frame (with `camera_orbit_degrees` as the older pure-azimuth sweep).
+
 ## API layout
 
 The public API is re-exported from the top-level `fewview` package and grouped

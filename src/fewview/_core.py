@@ -1528,6 +1528,64 @@ def to_pyvista(volume: RetardedTimeVolume):
     return grid
 
 
+def _apply_camera_offset(
+    plotter, camera_azimuth: float, camera_elevation: float
+) -> None:
+    """Rotate the camera by fixed angle offsets about the current focal point.
+
+    ``camera_azimuth`` orbits the camera horizontally (about the view-up axis)
+    and ``camera_elevation`` tilts it vertically, both in degrees and applied on
+    top of the ``camera_view`` preset. The view-up vector is re-orthogonalized
+    afterwards so large tilts do not skew the horizon.
+    """
+
+    if camera_azimuth == 0.0 and camera_elevation == 0.0:
+        return
+    camera = plotter.camera
+    if camera_azimuth != 0.0:
+        camera.Azimuth(float(camera_azimuth))
+    if camera_elevation != 0.0:
+        camera.Elevation(float(camera_elevation))
+    camera.OrthogonalizeViewUp()
+
+
+# The preset cameras sit at this distance (in units of the volume radius); the
+# oblique preset is at |(2, -4.2, 1)| and the absolute-angle placement matches
+# it so ``camera_zoom`` and framing stay consistent across camera modes.
+_PRESET_CAMERA_DISTANCE = float(np.sqrt(2.0**2 + 4.2**2 + 1.0**2))
+
+
+def _camera_angle_vectors(
+    radius: float,
+    latitude: float,
+    longitude: float,
+    *,
+    distance: Optional[float] = None,
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Return the ``(position, view_up)`` for an absolute camera angle.
+
+    ``latitude`` is degrees above the equatorial plane and ``longitude`` is the
+    azimuth in degrees measured from the ``+x`` axis toward ``+y``. The spin
+    axis is used as the view-up reference, except within one degree of a pole
+    where it becomes parallel to the view direction and a horizontal up is used
+    instead.
+    """
+
+    lat = np.deg2rad(latitude)
+    lon = np.deg2rad(longitude)
+    span = _PRESET_CAMERA_DISTANCE * radius if distance is None else float(distance)
+    position = (
+        span * np.cos(lat) * np.cos(lon),
+        span * np.cos(lat) * np.sin(lon),
+        span * np.sin(lat),
+    )
+    if abs(latitude) >= 89.0:
+        view_up = (-np.sin(lon), np.cos(lon), 0.0)
+    else:
+        view_up = (0.0, 0.0, 1.0)
+    return position, view_up
+
+
 def _validate_volume_presentation(
     component: VolumeComponent,
     opacity_profile: VolumeOpacityProfile,
@@ -1671,6 +1729,10 @@ def render_volume(
     image_scale: int = 1,
     camera_view: VolumeCameraView = "oblique",
     camera_zoom: Optional[float] = None,
+    camera_azimuth: float = 0.0,
+    camera_elevation: float = 0.0,
+    camera_latitude: Optional[float] = None,
+    camera_longitude: Optional[float] = None,
     starfield: Optional[bool] = None,
     star_count: Optional[int] = None,
     source_marker: bool = False,
@@ -1731,6 +1793,19 @@ def render_volume(
             to look down the spin-frame axis. The face-on view collapses the
             unavoidable signed-polarization chart axis onto the source marker.
         camera_zoom: Optional camera zoom multiplier.
+        camera_azimuth: Degrees to orbit the camera horizontally (about the
+            view-up axis) on top of ``camera_view``. Default ``0``.
+        camera_elevation: Degrees to tilt the camera vertically on top of
+            ``camera_view``. Default ``0``. Keep the magnitude below ~85 to
+            avoid flipping the view over the pole.
+        camera_latitude: Absolute camera latitude in degrees above the
+            equatorial plane. When set (with or without ``camera_longitude``),
+            it replaces ``camera_view`` and places the camera at that exact
+            angle; ``camera_azimuth``/``camera_elevation`` still apply on top.
+            Must lie in ``[-90, 90]``.
+        camera_longitude: Absolute camera azimuth in degrees, measured from the
+            ``+x`` axis toward ``+y``. Pairs with ``camera_latitude``; if only
+            one is given the other defaults to ``0``.
         starfield: Add a deterministic background star field. The dramatic
             preset enables it unless explicitly disabled.
         star_count: Number of deterministic stars distributed around the scene.
@@ -1875,7 +1950,14 @@ def render_volume(
         )
 
     r = volume.radius
-    if camera_view == "face_on":
+    if camera_latitude is not None or camera_longitude is not None:
+        latitude = 0.0 if camera_latitude is None else float(camera_latitude)
+        longitude = 0.0 if camera_longitude is None else float(camera_longitude)
+        if abs(latitude) > 90.0:
+            raise ValueError("camera_latitude must be in the interval [-90, 90]")
+        position, view_up = _camera_angle_vectors(r, latitude, longitude)
+        plotter.camera_position = [position, (0.0, 0.0, 0.0), view_up]
+    elif camera_view == "face_on":
         plotter.camera_position = [
             (0.0, 0.0, 4.75 * r),
             (0.0, 0.0, 0.0),
@@ -1890,6 +1972,7 @@ def render_volume(
     plotter.camera.parallel_projection = False
     plotter.camera.view_angle = 26.5
     plotter.camera.zoom(resolved_presentation.camera_zoom)
+    _apply_camera_offset(plotter, camera_azimuth, camera_elevation)
 
     screenshot_path = None if screenshot is None else str(Path(screenshot))
     if show:
@@ -2338,6 +2421,10 @@ def render_mode_frame(
     image_scale: int = 1,
     camera_view: VolumeCameraView = "oblique",
     camera_zoom: Optional[float] = None,
+    camera_azimuth: float = 0.0,
+    camera_elevation: float = 0.0,
+    camera_latitude: Optional[float] = None,
+    camera_longitude: Optional[float] = None,
     starfield: Optional[bool] = None,
     star_count: Optional[int] = None,
     source_marker: bool = False,
@@ -2500,6 +2587,10 @@ def render_mode_frame(
         window_size=main_window_size,
         camera_view=camera_view,
         camera_zoom=camera_zoom,
+        camera_azimuth=camera_azimuth,
+        camera_elevation=camera_elevation,
+        camera_latitude=camera_latitude,
+        camera_longitude=camera_longitude,
         starfield=starfield,
         star_count=star_count,
         source_marker=source_marker and not show_bodies,
@@ -2595,7 +2686,13 @@ def render_mode_animation(
     image_scale: int = 1,
     camera_view: VolumeCameraView = "oblique",
     camera_zoom: Optional[float] = None,
+    camera_azimuth: float = 0.0,
+    camera_elevation: float = 0.0,
+    camera_latitude: Optional[float] = None,
+    camera_longitude: Optional[float] = None,
     camera_orbit_degrees: float = 0.0,
+    camera_latitude_end: Optional[float] = None,
+    camera_longitude_end: Optional[float] = None,
     starfield: Optional[bool] = None,
     star_count: Optional[int] = None,
     source_marker: bool = False,
@@ -2645,6 +2742,14 @@ def render_mode_animation(
     self-normalized instead (``normalization_samples`` is then unused).
     For energy flux, ``flux_mode_combination="incoherent"`` removes modal
     cross terms and therefore suppresses rapidly rotating angular lobes.
+
+    The camera can be flown during the movie. Set the starting view with
+    ``camera_view`` or an absolute ``camera_latitude``/``camera_longitude``,
+    then give ``camera_latitude_end``/``camera_longitude_end`` to have the
+    camera travel to that absolute angle by the final frame; the motion is keyed
+    to the global interval so cluster segments join seamlessly. This is the
+    general form of ``camera_orbit_degrees`` (a pure longitude sweep), which
+    still works when no ``*_end`` angle is given.
     """
 
     output = Path(filename)
@@ -2843,6 +2948,10 @@ def render_mode_animation(
         window_size=main_window_size,
         camera_view=camera_view,
         camera_zoom=camera_zoom,
+        camera_azimuth=camera_azimuth,
+        camera_elevation=camera_elevation,
+        camera_latitude=camera_latitude,
+        camera_longitude=camera_longitude,
         starfield=starfield,
         star_count=star_count,
         source_marker=source_marker and not show_bodies,
@@ -2910,6 +3019,37 @@ def render_mode_animation(
         writer = imageio.get_writer(output, mode="I", fps=fps, loop=0)
 
     base_camera_position = np.asarray(plotter.camera.position, dtype=float)
+    # Resolve the camera flight path. The starting angle comes from whatever the
+    # first frame ended up at (a preset, or an absolute camera_latitude/
+    # longitude), read straight off the camera; the end angle is the *_end
+    # target. When either differs from the start the camera is flown between the
+    # two absolute angles across the global interval, which is the general
+    # replacement for ``camera_orbit_degrees``.
+    camera_distance = float(np.linalg.norm(base_camera_position))
+    camera_latitude_start = float(
+        np.degrees(np.arcsin(base_camera_position[2] / camera_distance))
+    )
+    camera_longitude_start = float(
+        np.degrees(
+            np.arctan2(base_camera_position[1], base_camera_position[0])
+        )
+    )
+    latitude_target = (
+        camera_latitude_start
+        if camera_latitude_end is None
+        else float(camera_latitude_end)
+    )
+    longitude_target = (
+        camera_longitude_start
+        if camera_longitude_end is None
+        else float(camera_longitude_end)
+    )
+    if abs(latitude_target) > 90.0:
+        raise ValueError("camera_latitude_end must be in the interval [-90, 90]")
+    fly_camera = (
+        latitude_target != camera_latitude_start
+        or longitude_target != camera_longitude_start
+    )
     render_array = grid.point_data[render_name]
     try:
         plotter.show(auto_close=False)
@@ -2953,7 +3093,24 @@ def render_mode_animation(
                     _set_polyline_points(
                         trajectory_polyline, tail, color=trajectory_color
                     )
-            if camera_orbit_degrees != 0.0:
+            if fly_camera:
+                global_fraction = (float(frame_time) - global_start) / (
+                    global_end - global_start
+                )
+                latitude = camera_latitude_start + global_fraction * (
+                    latitude_target - camera_latitude_start
+                )
+                longitude = camera_longitude_start + global_fraction * (
+                    longitude_target - camera_longitude_start
+                )
+                position, view_up = _camera_angle_vectors(
+                    radius, latitude, longitude, distance=camera_distance
+                )
+                plotter.camera.position = position
+                plotter.camera.focal_point = (0.0, 0.0, 0.0)
+                plotter.camera.up = view_up
+                plotter.reset_camera_clipping_range()
+            elif camera_orbit_degrees != 0.0:
                 global_fraction = (float(frame_time) - global_start) / (
                     global_end - global_start
                 )

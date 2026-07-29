@@ -205,6 +205,9 @@ fv.render_mode_animation(
 | `color_scheme` | Matplotlib names + `rainbow`, `aurora`, `cinematic` | `fv.available_color_schemes()` lists them |
 | `presentation` | `balanced`, `dramatic`, `shells_dramatic` | preset lighting, exposure, starfield |
 | `camera_view` | `oblique`, `face_on` | `face_on` looks down the spin axis |
+| `camera_azimuth`, `camera_elevation` | degrees | orbit/tilt the camera on top of `camera_view` (`camera_zoom` frames it) |
+| `camera_latitude`, `camera_longitude` | degrees | absolute view: latitude above the equatorial plane, azimuth from `+x`; overrides `camera_view` |
+| `camera_latitude_end`, `camera_longitude_end` | degrees | animations only: fly the camera to this absolute angle by the final frame |
 
 ## Two physical caveats
 

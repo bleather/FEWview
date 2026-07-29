@@ -4,8 +4,11 @@ import numpy as np
 
 from fewview._core import (
     RelativisticModeWaveform,
+    _PRESET_CAMERA_DISTANCE,
     _PRIMARY_HALO_SCALE,
     _SECONDARY_BODY_SCALE,
+    _apply_camera_offset,
+    _camera_angle_vectors,
     _normalization_frame_times,
     _normalize_render_field,
     _prepare_display_trajectory,
@@ -297,6 +300,67 @@ class VisualizationTest(unittest.TestCase):
         self.assertAlmostEqual(_resolve_opacity(None, "shells"), 0.30)
         self.assertAlmostEqual(_resolve_opacity(None, "soft"), 0.11)
         self.assertAlmostEqual(_resolve_opacity(0.42, "flux"), 0.42)
+
+    def test_apply_camera_offset_rotates_only_when_requested(self):
+        class _Camera:
+            def __init__(self):
+                self.calls = []
+
+            def Azimuth(self, angle):
+                self.calls.append(("azimuth", angle))
+
+            def Elevation(self, angle):
+                self.calls.append(("elevation", angle))
+
+            def OrthogonalizeViewUp(self):
+                self.calls.append(("orthogonalize",))
+
+        class _Plotter:
+            def __init__(self):
+                self.camera = _Camera()
+
+        # A zero offset must leave the preset camera untouched.
+        idle = _Plotter()
+        _apply_camera_offset(idle, 0.0, 0.0)
+        self.assertEqual(idle.camera.calls, [])
+
+        # Both angles: orbit, then tilt, then re-level the horizon.
+        both = _Plotter()
+        _apply_camera_offset(both, 30.0, -15.0)
+        self.assertEqual(
+            both.camera.calls,
+            [("azimuth", 30.0), ("elevation", -15.0), ("orthogonalize",)],
+        )
+
+        # Only elevation requested: azimuth is skipped.
+        tilt = _Plotter()
+        _apply_camera_offset(tilt, 0.0, 20.0)
+        self.assertEqual(
+            tilt.camera.calls, [("elevation", 20.0), ("orthogonalize",)]
+        )
+
+    def test_camera_angle_vectors_place_the_camera_at_absolute_angles(self):
+        radius = 2.0
+        position, view_up = _camera_angle_vectors(radius, 45.0, 30.0)
+        position = np.asarray(position)
+        distance = np.linalg.norm(position)
+
+        latitude = np.degrees(np.arcsin(position[2] / distance))
+        longitude = np.degrees(np.arctan2(position[1], position[0]))
+        self.assertAlmostEqual(latitude, 45.0, places=6)
+        self.assertAlmostEqual(longitude, 30.0, places=6)
+        # Distance scales with the volume radius so framing tracks the presets.
+        self.assertAlmostEqual(distance, _PRESET_CAMERA_DISTANCE * radius, places=6)
+        # Away from the poles the spin axis is the view-up reference.
+        self.assertEqual(tuple(view_up), (0.0, 0.0, 1.0))
+
+        # At the equator the camera lies in the equatorial plane.
+        equator, _ = _camera_angle_vectors(1.0, 0.0, 90.0)
+        self.assertAlmostEqual(equator[2], 0.0, places=6)
+
+        # Near a pole a horizontal up replaces the (degenerate) spin axis.
+        _, polar_up = _camera_angle_vectors(1.0, 90.0, 0.0)
+        self.assertAlmostEqual(polar_up[2], 0.0, places=6)
 
     def test_opacity_accumulation_distance_is_resolution_independent(self):
         self.assertAlmostEqual(_resolve_opacity_unit_distance(2.5, None), 0.1)
