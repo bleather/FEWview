@@ -98,6 +98,18 @@ appearance presets are `--presentation` and `--color-scheme`, and
 `--star-count`, `--background-color`, `--color-exposure`, `--camera-zoom`, and
 `--no-starfield` override individual choices.
 
+The camera can be aimed and flown. `--camera-view` picks the `oblique` or
+`face_on` preset; `--camera-latitude`/`--camera-longitude` set an absolute angle
+instead (latitude above the equatorial plane, azimuth from `+x`), and
+`--camera-azimuth`/`--camera-elevation` nudge a preset by a relative offset. For
+motion across the movie, `--camera-latitude-end`/`--camera-longitude-end` fly to
+an absolute angle by the final frame, `--camera-loop` circles a full 360° and
+rises to `--camera-latitude-end` then settles back on the opening view, and
+`--camera-orbit` is the older pure-azimuth sweep. All of these stay continuous
+across segments because each task shares the global frame interval. The strain
+panel is composited over the scene by default; pass `--no-waveform-transparent`
+for an opaque strip below it.
+
 Add `--account <allocation>` if your default Slurm account is not authorized for
 the GPU partition. If the CPU merge job needs a different account or partition,
 use `--merge-account` and `--merge-partition`.

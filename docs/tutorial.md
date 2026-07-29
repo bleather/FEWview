@@ -208,6 +208,8 @@ fv.render_mode_animation(
 | `camera_azimuth`, `camera_elevation` | degrees | orbit/tilt the camera on top of `camera_view` (`camera_zoom` frames it) |
 | `camera_latitude`, `camera_longitude` | degrees | absolute view: latitude above the equatorial plane, azimuth from `+x`; overrides `camera_view` |
 | `camera_latitude_end`, `camera_longitude_end` | degrees | animations only: fly the camera to this absolute angle by the final frame |
+| `camera_loop` | `True`/`False` | animations only: fly a full 360° and rise to `camera_latitude_end` (the peak) then back, ending on the opening view |
+| `waveform_transparent` | `True`/`False` | `True` (default) composites the strain panel over the scene so the background shows through; `False` is the opaque strip below |
 
 ## Two physical caveats
 

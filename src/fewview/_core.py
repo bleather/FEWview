@@ -2260,11 +2260,14 @@ class _WaveformPanelRenderer:
         font_style: WaveformFontStyle,
         style_file: Optional[PathLike],
         background_color: str,
+        transparent: bool = False,
     ) -> None:
         import matplotlib as mpl
         from matplotlib.backends.backend_agg import FigureCanvasAgg
         from matplotlib.figure import Figure
 
+        self.transparent = transparent
+        panel_face = "none" if transparent else background_color
         self.font_style = font_style
         self.style_file = None if style_file is None else str(Path(style_file))
         self.font_rc = dict(_LATEX_FONT_RC) if font_style == "latex" else {"text.usetex": False}
@@ -2291,11 +2294,11 @@ class _WaveformPanelRenderer:
             figure = Figure(
                 figsize=(width / dpi, height / dpi),
                 dpi=dpi,
-                facecolor=background_color,
+                facecolor=panel_face,
             )
             self.canvas = FigureCanvasAgg(figure)
             self.axis = figure.add_axes((0.055, 0.27, 0.92, 0.66))
-            self.axis.set_facecolor(background_color)
+            self.axis.set_facecolor(panel_face)
             self.axis.axhline(0.0, color="#20313a", linewidth=0.7 * fs, zorder=0)
             self.axis.plot(
                 self.relative_time,
@@ -2381,7 +2384,39 @@ class _WaveformPanelRenderer:
             self.time_label.set_text(f"t = {relative:,.1f} s")
         with self._style_context(mpl):
             self.canvas.draw()
-        return np.asarray(self.canvas.buffer_rgba())[..., :3].copy()
+        buffer = np.asarray(self.canvas.buffer_rgba())
+        # Keep the alpha channel when transparent so the panel can be
+        # alpha-composited over the scene; otherwise return opaque RGB.
+        if self.transparent:
+            return buffer.copy()
+        return buffer[..., :3].copy()
+
+
+def _combine_frame_and_panel(
+    image: np.ndarray, panel: np.ndarray
+) -> np.ndarray:
+    """Place the waveform panel along the bottom of a rendered frame.
+
+    An opaque (RGB) panel is stacked beneath a shorter scene render. A
+    transparent (RGBA) panel is alpha-composited over the bottom rows of a
+    full-height scene render instead, so the starfield and volume stay visible
+    behind the trace.
+    """
+
+    if panel.shape[1] != image.shape[1]:
+        raise RuntimeError("waveform panel width does not match the VTK render")
+    if panel.shape[2] < 4:
+        return np.vstack((image, panel))
+    rows = panel.shape[0]
+    if rows > image.shape[0]:
+        raise RuntimeError("waveform panel is taller than the rendered frame")
+    alpha = panel[..., 3:4].astype(np.float32) / 255.0
+    foreground = panel[..., :3].astype(np.float32)
+    background = image[-rows:, :, :3].astype(np.float32)
+    blended = foreground * alpha + background * (1.0 - alpha)
+    out = image.copy()
+    out[-rows:, :, :3] = np.clip(blended, 0.0, 255.0).astype(image.dtype)
+    return out
 
 
 def render_mode_frame(
@@ -2444,6 +2479,7 @@ def render_mode_frame(
     waveform_phi: float = 0.0,
     waveform_font_style: WaveformFontStyle = "latex",
     waveform_style_file: Optional[PathLike] = None,
+    waveform_transparent: bool = True,
 ) -> Path:
     """Render one full-sky mode frame with the animation presentation layers.
 
@@ -2519,7 +2555,12 @@ def render_mode_frame(
         if show_waveform
         else 0
     )
-    main_window_size = (total_width, total_height - panel_height)
+    transparent_panel = show_waveform and waveform_transparent
+    # A transparent panel is composited over a full-height scene render so the
+    # background shows through it; an opaque panel is stacked below a shorter
+    # scene render, so that render loses the panel's height.
+    main_height = total_height if transparent_panel else total_height - panel_height
+    main_window_size = (total_width, main_height)
     if min(main_window_size) <= 0:
         raise ValueError("waveform_fraction leaves no space for the volume")
 
@@ -2625,6 +2666,7 @@ def render_mode_frame(
             font_style=waveform_font_style,
             style_file=waveform_style_file,
             background_color=resolved_presentation.background_color,
+            transparent=transparent_panel,
         )
         if show_waveform
         else None
@@ -2639,9 +2681,7 @@ def render_mode_frame(
         )[..., :3]
         if waveform_panel is not None:
             panel = waveform_panel.render(frame)
-            if panel.shape[1] != image.shape[1]:
-                raise RuntimeError("waveform panel width does not match VTK render")
-            image = np.vstack((image, panel))
+            image = _combine_frame_and_panel(image, panel)
         imageio.imwrite(output, image)
     finally:
         plotter.close()
@@ -2693,6 +2733,7 @@ def render_mode_animation(
     camera_orbit_degrees: float = 0.0,
     camera_latitude_end: Optional[float] = None,
     camera_longitude_end: Optional[float] = None,
+    camera_loop: bool = False,
     starfield: Optional[bool] = None,
     star_count: Optional[int] = None,
     source_marker: bool = False,
@@ -2712,6 +2753,7 @@ def render_mode_animation(
     waveform_phi: float = 0.0,
     waveform_font_style: WaveformFontStyle = "latex",
     waveform_style_file: Optional[PathLike] = None,
+    waveform_transparent: bool = True,
     global_start_time: Optional[float] = None,
     global_end_time: Optional[float] = None,
     normalization_time: Optional[float] = None,
@@ -2749,7 +2791,15 @@ def render_mode_animation(
     camera travel to that absolute angle by the final frame; the motion is keyed
     to the global interval so cluster segments join seamlessly. This is the
     general form of ``camera_orbit_degrees`` (a pure longitude sweep), which
-    still works when no ``*_end`` angle is given.
+    still works when no ``*_end`` angle is given. ``camera_loop=True`` instead
+    flies a full 360 degrees of longitude back to the start while easing the
+    latitude up to ``camera_latitude_end`` (the peak) and back, so the shot
+    circles the binary and returns to the opening view.
+
+    ``show_waveform=True`` draws the strain panel along the bottom. By default
+    (``waveform_transparent=True``) it is composited over a full-height scene
+    render so the starfield and volume stay visible behind the trace; set
+    ``waveform_transparent=False`` for the older opaque strip below the scene.
     """
 
     output = Path(filename)
@@ -2845,7 +2895,12 @@ def render_mode_animation(
         if show_waveform
         else 0
     )
-    main_window_size = (total_width, total_height - panel_height)
+    transparent_panel = show_waveform and waveform_transparent
+    # A transparent panel is composited over a full-height scene render so the
+    # background shows through it; an opaque panel is stacked below a shorter
+    # scene render, so that render loses the panel's height.
+    main_height = total_height if transparent_panel else total_height - panel_height
+    main_window_size = (total_width, main_height)
     if min(main_window_size) <= 0:
         raise ValueError("waveform_fraction leaves no space for the volume")
 
@@ -3000,6 +3055,7 @@ def render_mode_animation(
             font_style=waveform_font_style,
             style_file=waveform_style_file,
             background_color=resolved_presentation.background_color,
+            transparent=transparent_panel,
         )
         if show_waveform
         else None
@@ -3093,7 +3149,27 @@ def render_mode_animation(
                     _set_polyline_points(
                         trajectory_polyline, tail, color=trajectory_color
                     )
-            if fly_camera:
+            if camera_loop:
+                global_fraction = (float(frame_time) - global_start) / (
+                    global_end - global_start
+                )
+                # Longitude sweeps a full turn (back to the start); latitude
+                # eases up to the peak (``camera_latitude_end``) at the halfway
+                # point and back down, with zero speed at both ends so the shot
+                # opens and closes gently.
+                ease = (1.0 - np.cos(2.0 * np.pi * global_fraction)) / 2.0
+                latitude = camera_latitude_start + ease * (
+                    latitude_target - camera_latitude_start
+                )
+                longitude = camera_longitude_start + 360.0 * global_fraction
+                position, view_up = _camera_angle_vectors(
+                    radius, latitude, longitude, distance=camera_distance
+                )
+                plotter.camera.position = position
+                plotter.camera.focal_point = (0.0, 0.0, 0.0)
+                plotter.camera.up = view_up
+                plotter.reset_camera_clipping_range()
+            elif fly_camera:
                 global_fraction = (float(frame_time) - global_start) / (
                     global_end - global_start
                 )
@@ -3131,11 +3207,7 @@ def render_mode_animation(
             image = np.asarray(image)[..., :3]
             if waveform_panel is not None:
                 panel = waveform_panel.render(float(frame_time))
-                if panel.shape[1] != image.shape[1]:
-                    raise RuntimeError(
-                        "waveform panel width does not match the VTK render"
-                    )
-                image = np.vstack((image, panel))
+                image = _combine_frame_and_panel(image, panel)
             writer.append_data(image)
     finally:
         writer.close()

@@ -240,7 +240,54 @@ def build_parser() -> argparse.ArgumentParser:
         default="oblique",
     )
     render.add_argument("--camera-zoom", type=float, default=0.95)
-    render.add_argument("--camera-orbit", type=float, default=0.0)
+    render.add_argument(
+        "--camera-orbit",
+        type=float,
+        default=0.0,
+        help="animate a pure azimuth sweep (degrees) over the movie",
+    )
+    render.add_argument(
+        "--camera-azimuth",
+        type=float,
+        default=0.0,
+        help="relative azimuth offset (degrees) on top of --camera-view",
+    )
+    render.add_argument(
+        "--camera-elevation",
+        type=float,
+        default=0.0,
+        help="relative elevation offset (degrees) on top of --camera-view",
+    )
+    render.add_argument(
+        "--camera-latitude",
+        type=float,
+        default=None,
+        help="absolute camera latitude (degrees above the equatorial plane)",
+    )
+    render.add_argument(
+        "--camera-longitude",
+        type=float,
+        default=None,
+        help="absolute camera azimuth (degrees from +x); pairs with --camera-latitude",
+    )
+    render.add_argument(
+        "--camera-latitude-end",
+        type=float,
+        default=None,
+        help="fly the camera to this latitude by the final frame (the peak with --camera-loop)",
+    )
+    render.add_argument(
+        "--camera-longitude-end",
+        type=float,
+        default=None,
+        help="fly the camera to this longitude by the final frame",
+    )
+    render.add_argument(
+        "--camera-loop",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="fly a full 360 degrees back to the start, rising to --camera-latitude-end and back",
+    )
     render.add_argument(
         "--starfield", action=argparse.BooleanOptionalAction, default=None
     )
@@ -253,6 +300,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     render.add_argument(
         "--waveform-panel", action=argparse.BooleanOptionalAction, default=True
+    )
+    render.add_argument(
+        "--waveform-transparent",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="composite the strain panel over the scene (default) instead of an opaque strip",
     )
     render.add_argument("--trajectory-tail-cycles", type=float, default=2.0)
     render.add_argument("--trajectory-line-width", type=float, default=1.6)
@@ -345,6 +398,10 @@ def _worker_arguments(
         args.camera_view,
         "--camera-orbit",
         str(args.camera_orbit),
+        "--camera-azimuth",
+        str(args.camera_azimuth),
+        "--camera-elevation",
+        str(args.camera_elevation),
         "--trajectory-tail-cycles",
         str(args.trajectory_tail_cycles),
         "--trajectory-line-width",
@@ -363,6 +420,10 @@ def _worker_arguments(
         "--trajectory" if args.trajectory else "--no-trajectory",
         "--trajectory-tube" if args.trajectory_tube else "--no-trajectory-tube",
         "--waveform-panel" if args.waveform_panel else "--no-waveform-panel",
+        "--camera-loop" if args.camera_loop else "--no-camera-loop",
+        "--waveform-transparent"
+        if args.waveform_transparent
+        else "--no-waveform-transparent",
     ]
     if args.starfield is not None:
         values.append("--starfield" if args.starfield else "--no-starfield")
@@ -377,6 +438,10 @@ def _worker_arguments(
         "color_exposure",
         "background_color",
         "camera_zoom",
+        "camera_latitude",
+        "camera_longitude",
+        "camera_latitude_end",
+        "camera_longitude_end",
         "star_count",
     ):
         value = getattr(args, name)
@@ -463,11 +528,19 @@ def main(argv: list[str] | None = None) -> int:
         "camera_view",
         "camera_zoom",
         "camera_orbit",
+        "camera_azimuth",
+        "camera_elevation",
+        "camera_latitude",
+        "camera_longitude",
+        "camera_latitude_end",
+        "camera_longitude_end",
+        "camera_loop",
         "starfield",
         "star_count",
         "bodies",
         "trajectory",
         "waveform_panel",
+        "waveform_transparent",
         "trajectory_tail_cycles",
         "trajectory_line_width",
         "trajectory_color",

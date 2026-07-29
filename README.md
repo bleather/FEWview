@@ -158,7 +158,11 @@ them all.
 (azimuth from `+x`); `camera_azimuth`/`camera_elevation` instead nudge the
 preset by a relative offset. In `render_mode_animation` the camera can fly:
 give `camera_latitude_end`/`camera_longitude_end` and it travels there by the
-final frame (with `camera_orbit_degrees` as the older pure-azimuth sweep).
+final frame, or set `camera_loop=True` to circle a full 360° and rise to a peak
+latitude then settle back on the opening view (with `camera_orbit_degrees` as
+the older pure-azimuth sweep). The `show_waveform` strain panel is composited
+over the scene by default (`waveform_transparent=True`) so the background shows
+through it; pass `waveform_transparent=False` for the older opaque strip.
 
 ## API layout
 

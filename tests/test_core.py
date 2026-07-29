@@ -9,6 +9,7 @@ from fewview._core import (
     _SECONDARY_BODY_SCALE,
     _apply_camera_offset,
     _camera_angle_vectors,
+    _combine_frame_and_panel,
     _normalization_frame_times,
     _normalize_render_field,
     _prepare_display_trajectory,
@@ -361,6 +362,33 @@ class VisualizationTest(unittest.TestCase):
         # Near a pole a horizontal up replaces the (degenerate) spin axis.
         _, polar_up = _camera_angle_vectors(1.0, 90.0, 0.0)
         self.assertAlmostEqual(polar_up[2], 0.0, places=6)
+
+    def test_combine_frame_and_panel_stacks_opaque_but_composites_transparent(self):
+        image = np.full((20, 8, 3), 100, dtype=np.uint8)
+
+        # An opaque (RGB) panel is stacked beneath the scene, growing the frame.
+        opaque = np.full((5, 8, 3), 200, dtype=np.uint8)
+        stacked = _combine_frame_and_panel(image, opaque)
+        self.assertEqual(stacked.shape, (25, 8, 3))
+        np.testing.assert_array_equal(stacked[:20], image)
+        np.testing.assert_array_equal(stacked[20:], opaque)
+
+        # A transparent (RGBA) panel is alpha-composited over the bottom rows of
+        # a full-height render, so the frame keeps its height and the scene
+        # shows through wherever the panel is transparent.
+        panel = np.zeros((5, 8, 4), dtype=np.uint8)
+        panel[..., :3] = 240
+        panel[2, :, 3] = 255  # one fully opaque row; the rest stay transparent
+        out = _combine_frame_and_panel(image, panel)
+        self.assertEqual(out.shape, (20, 8, 3))
+        np.testing.assert_array_equal(out[:15], image[:15])  # untouched above
+        np.testing.assert_array_equal(
+            out[17], np.full((8, 3), 240, dtype=np.uint8)
+        )  # opaque panel row overwrites the scene
+        np.testing.assert_array_equal(out[15], image[15])  # transparent row kept
+
+        with self.assertRaisesRegex(RuntimeError, "width"):
+            _combine_frame_and_panel(image, np.zeros((5, 9, 4), dtype=np.uint8))
 
     def test_opacity_accumulation_distance_is_resolution_independent(self):
         self.assertAlmostEqual(_resolve_opacity_unit_distance(2.5, None), 0.1)
