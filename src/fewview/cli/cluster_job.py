@@ -283,6 +283,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="fly the camera to this longitude by the final frame",
     )
     render.add_argument(
+        "--camera-zoom-end",
+        type=float,
+        default=None,
+        help="zoom factor to reach by the final frame (larger = more magnified)",
+    )
+    render.add_argument(
         "--camera-loop",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -442,6 +448,7 @@ def _worker_arguments(
         "camera_longitude",
         "camera_latitude_end",
         "camera_longitude_end",
+        "camera_zoom_end",
         "star_count",
     ):
         value = getattr(args, name)
@@ -534,6 +541,7 @@ def main(argv: list[str] | None = None) -> int:
         "camera_longitude",
         "camera_latitude_end",
         "camera_longitude_end",
+        "camera_zoom_end",
         "camera_loop",
         "starfield",
         "star_count",

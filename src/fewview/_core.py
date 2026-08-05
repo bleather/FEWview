@@ -1554,6 +1554,12 @@ def _apply_camera_offset(
 # it so ``camera_zoom`` and framing stay consistent across camera modes.
 _PRESET_CAMERA_DISTANCE = float(np.sqrt(2.0**2 + 4.2**2 + 1.0**2))
 
+# Perspective field of view before ``camera_zoom`` is applied. A zoom factor z
+# maps to a view angle of ``_CAMERA_VIEW_ANGLE / z`` (PyVista's ``camera.zoom``
+# divides the angle), so animating the view angle this way gives absolute,
+# non-compounding zoom control frame to frame.
+_CAMERA_VIEW_ANGLE = 26.5
+
 
 def _camera_angle_vectors(
     radius: float,
@@ -1970,7 +1976,7 @@ def render_volume(
             (0.0, 0.0, 1.0),
         ]
     plotter.camera.parallel_projection = False
-    plotter.camera.view_angle = 26.5
+    plotter.camera.view_angle = _CAMERA_VIEW_ANGLE
     plotter.camera.zoom(resolved_presentation.camera_zoom)
     _apply_camera_offset(plotter, camera_azimuth, camera_elevation)
 
@@ -2733,6 +2739,7 @@ def render_mode_animation(
     camera_orbit_degrees: float = 0.0,
     camera_latitude_end: Optional[float] = None,
     camera_longitude_end: Optional[float] = None,
+    camera_zoom_end: Optional[float] = None,
     camera_loop: bool = False,
     starfield: Optional[bool] = None,
     star_count: Optional[int] = None,
@@ -2794,7 +2801,10 @@ def render_mode_animation(
     still works when no ``*_end`` angle is given. ``camera_loop=True`` instead
     flies a full 360 degrees of longitude back to the start while easing the
     latitude up to ``camera_latitude_end`` (the peak) and back, so the shot
-    circles the binary and returns to the opening view.
+    circles the binary and returns to the opening view. ``camera_zoom_end``
+    interpolates the zoom factor from the starting ``camera_zoom`` to that value
+    across the movie (larger = more magnified), so the camera pushes in or pulls
+    out over the inspiral; it combines with any of the angle motions above.
 
     ``show_waveform=True`` draws the strain panel along the bottom. By default
     (``waveform_transparent=True``) it is composited over a full-height scene
@@ -3106,6 +3116,16 @@ def render_mode_animation(
         latitude_target != camera_latitude_start
         or longitude_target != camera_longitude_start
     )
+    # Optional zoom flight: interpolate the zoom factor from the starting value
+    # (whatever ``camera_zoom``/preset resolved to) up to ``camera_zoom_end``
+    # across the global interval, and set the view angle directly each frame so
+    # it does not compound. Larger zoom = closer/more magnified.
+    zoom_start = float(resolved_presentation.camera_zoom)
+    if camera_zoom_end is not None and float(camera_zoom_end) <= 0.0:
+        plotter.close()
+        raise ValueError("camera_zoom_end must be positive")
+    zoom_target = zoom_start if camera_zoom_end is None else float(camera_zoom_end)
+    animate_zoom = zoom_target != zoom_start
     render_array = grid.point_data[render_name]
     try:
         plotter.show(auto_close=False)
@@ -3199,6 +3219,12 @@ def render_mode_animation(
                     sine * x + cosine * y,
                     z,
                 )
+            if animate_zoom:
+                global_fraction = (float(frame_time) - global_start) / (
+                    global_end - global_start
+                )
+                zoom = zoom_start + global_fraction * (zoom_target - zoom_start)
+                plotter.camera.view_angle = _CAMERA_VIEW_ANGLE / zoom
             plotter.render()
             image = plotter.screenshot(
                 return_img=True,

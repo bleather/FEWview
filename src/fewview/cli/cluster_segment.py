@@ -180,6 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--camera-longitude", type=float, default=None)
     parser.add_argument("--camera-latitude-end", type=float, default=None)
     parser.add_argument("--camera-longitude-end", type=float, default=None)
+    parser.add_argument("--camera-zoom-end", type=float, default=None)
     parser.add_argument(
         "--camera-loop", action=argparse.BooleanOptionalAction, default=False
     )
@@ -325,6 +326,7 @@ def main(argv: list[str] | None = None) -> int:
         camera_longitude=args.camera_longitude,
         camera_latitude_end=args.camera_latitude_end,
         camera_longitude_end=args.camera_longitude_end,
+        camera_zoom_end=args.camera_zoom_end,
         camera_loop=args.camera_loop,
         starfield=args.starfield,
         star_count=args.star_count,

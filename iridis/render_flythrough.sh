@@ -52,7 +52,11 @@ fi
 
 # If Iridis reports a software renderer instead of the GPU in the job log,
 # swap '--headless-backend egl' for '--headless-backend auto' (xvfb fallback).
-# For a preemptible partition, add '--preemptible' so requeued tasks resume.
+# On a preemptible (scavenger) partition you *may* add '--preemptible' so
+# requeued tasks resume -- but this cluster disables requeue and rejects the
+# '#SBATCH --requeue' line it adds ("Please remove your #SBATCH --requeue line").
+# If you hit that, omit '--preemptible' and just re-run this script after any
+# preemption: finished segments are skipped via their .done markers.
 fewview-cluster-job "$MODES" \
     --job-dir "$JOBDIR" \
     --partition "$PARTITION" "${ACCOUNT_ARG[@]}" \

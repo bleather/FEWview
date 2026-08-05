@@ -17,6 +17,7 @@ class ClusterCameraFlagTests(unittest.TestCase):
                 "--camera-latitude", "10",
                 "--camera-longitude", "0",
                 "--camera-latitude-end", "70",
+                "--camera-zoom-end", "1.8",
                 "--camera-loop",
                 "--camera-azimuth", "5",
                 "--camera-elevation", "-3",
@@ -32,6 +33,7 @@ class ClusterCameraFlagTests(unittest.TestCase):
         self.assertEqual(seg.camera_longitude, 0.0)
         self.assertEqual(seg.camera_latitude_end, 70.0)
         self.assertIsNone(seg.camera_longitude_end)
+        self.assertEqual(seg.camera_zoom_end, 1.8)
         self.assertTrue(seg.camera_loop)
         self.assertEqual(seg.camera_azimuth, 5.0)
         self.assertEqual(seg.camera_elevation, -3.0)
@@ -43,10 +45,12 @@ class ClusterCameraFlagTests(unittest.TestCase):
         # With no absolute angle requested, the optional flags are not emitted.
         self.assertNotIn("--camera-latitude", worker)
         self.assertNotIn("--camera-longitude-end", worker)
+        self.assertNotIn("--camera-zoom-end", worker)
         seg = cluster_segment.build_parser().parse_args(
             worker + ["--segment-index", "0"]
         )
         self.assertIsNone(seg.camera_latitude)
+        self.assertIsNone(seg.camera_zoom_end)
         self.assertFalse(seg.camera_loop)
         self.assertTrue(seg.waveform_transparent)  # transparent panel by default
 
