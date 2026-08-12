@@ -14,7 +14,7 @@
 set -euo pipefail
 
 # ---- Iridis / site settings (EDIT THESE) ---------------------------------
-PARTITION="a100"                    # GPU partition name; list with `sinfo -s`
+PARTITION="a100"                   # GPU partition name; list with `sinfo -s`
 ACCOUNT="normal"                         # Slurm account for the GPU partition ("" = your default)
 CONDA_MODULE=""    # find yours with `module avail` (anaconda/miniforge/...)
 CONDA_ENV="few_env"                # env with fewview + FastEMRIWaveforms installed
