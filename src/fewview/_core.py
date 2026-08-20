@@ -65,6 +65,7 @@ _MATPLOTLIB_COLOR_SCHEMES = {
 _VOLUME_COLOR_SCHEMES = frozenset(_MATPLOTLIB_COLOR_SCHEMES) | {
     "rainbow",
     "cinematic",
+    "ice",
 }
 PathLike = Union[str, Path]
 
@@ -3496,7 +3497,7 @@ def _volume_colormap(
 
     if color_exposure <= 0.0:
         raise ValueError("color_exposure must be positive")
-    if color_scheme in ("cinematic", "rainbow"):
+    if color_scheme in ("cinematic", "rainbow", "ice"):
         if color_scheme == "rainbow":
             # A perceptually smooth blue-cyan-green-gold-red sequence, a gentler
             # alternative to a hard rainbow for signed-strain shells.
@@ -3509,6 +3510,19 @@ def _volume_colormap(
                 "#f5df4d",
                 "#f79a42",
                 "#e54155",
+            ]
+        elif color_scheme == "ice":
+            # Deep navy through blue and cyan to a white-hot core, matching the
+            # numerical-relativity "blue shells with a bright centre" look: faint
+            # outer shells stay navy while the strongest crests read as white.
+            colors = [
+                "#040a24",
+                "#0a2a66",
+                "#1657b8",
+                "#2f92e6",
+                "#71c4f4",
+                "#bfe7fc",
+                "#f4fbff",
             ]
         elif component in ("amplitude", "energy_flux"):
             colors = [

@@ -212,6 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
             "cool",
             "blues",
             "cinematic",
+            "ice",
         ),
         default="rainbow",
     )
