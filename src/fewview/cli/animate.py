@@ -88,8 +88,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--polar-samples", type=int, default=48)
     parser.add_argument("--azimuthal-samples", type=int, default=96)
-    parser.add_argument("--opacity", type=float, default=None,
-        help="max opacity; default is profile-aware (0.30 for shells, else 0.11)")
+    parser.add_argument(
+        "--opacity",
+        type=float,
+        default=None,
+        help="max opacity; defaults to 0.55 for flux, 0.30 for shells, and 0.11 otherwise",
+    )
     parser.add_argument("--shell-count", type=int, default=7)
     parser.add_argument("--shell-min", type=float, default=0.10)
     parser.add_argument("--shell-max", type=float, default=0.92)
