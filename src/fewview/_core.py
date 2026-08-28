@@ -1777,8 +1777,8 @@ def render_volume(
             above one brighten the palette without making the volume more solid.
         background_color: Optional Matplotlib-compatible render background.
         opacity: Maximum opacity in the transfer function. ``None`` (the
-            default) applies a profile-aware value: 0.30 for the ``shells``
-            profile, 0.11 otherwise.
+            default) applies a profile-aware value: 0.55 for ``flux``, 0.30 for
+            ``shells``, and 0.11 otherwise.
         shell_count: Number of translucent positive-strain level sheets.
         shell_min: Normalized strain at the first shell.
         shell_max: Normalized strain at the final shell.
