@@ -58,6 +58,7 @@ def load_mode_waveform(filename: Path) -> tuple[RelativisticModeWaveform, np.nda
             primary_mass=_optional_float(data, "primary_mass"),
             secondary_mass=_optional_float(data, "secondary_mass"),
             spin=_optional_float(data, "spin"),
+            model=str(data["model"]) if "model" in data else "FastKerrEccentricEquatorialFlux",
         )
         if "h_plus_reference" in data and "h_cross_reference" in data:
             reference = np.asarray(data["h_plus_reference"]) - 1j * np.asarray(

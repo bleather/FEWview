@@ -255,6 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         primary_mass=waveform.primary_mass,
         secondary_mass=waveform.secondary_mass,
         spin=waveform.spin,
+        model=waveform.model,
         h_plus_reference=h_plus,
         h_cross_reference=h_cross,
     )
