@@ -1586,10 +1586,11 @@ def _camera_angle_vectors(
         span * np.cos(lat) * np.sin(lon),
         span * np.sin(lat),
     )
-    if abs(latitude) >= 89.0:
-        view_up = (-np.sin(lon), np.cos(lon), 0.0)
-    else:
-        view_up = (0.0, 0.0, 1.0)
+    view_up = (
+        -np.sin(lat) * np.cos(lon),
+        -np.sin(lat) * np.sin(lon),
+        np.cos(lat),
+    )
     return position, view_up
 
 
