@@ -70,7 +70,7 @@ font.serif: cmr10, Computer Modern Roman, STIXGeneral, DejaVu Serif
 ### Grid lines
 grid.linewidth : 0.5
 grid.linestyle : dashed
-grid.color : 'xkcd:light gray'
+grid.color : xkcd:light gray
 
 ### Saving figures
 path.simplify : True
