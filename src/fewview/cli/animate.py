@@ -88,7 +88,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--polar-samples", type=int, default=48)
     parser.add_argument("--azimuthal-samples", type=int, default=96)
-    parser.add_argument("--opacity", type=float, default=0.12)
+    parser.add_argument(
+        "--opacity",
+        type=float,
+        default=None,
+        help="max opacity; defaults to 0.55 for flux, 0.30 for shells, and 0.11 otherwise",
+    )
     parser.add_argument("--shell-count", type=int, default=7)
     parser.add_argument("--shell-min", type=float, default=0.10)
     parser.add_argument("--shell-max", type=float, default=0.92)
@@ -261,6 +266,7 @@ def load_mode_waveform(filename: Path) -> tuple[RelativisticModeWaveform, np.nda
         primary_mass=_optional_float(data, "primary_mass"),
         secondary_mass=_optional_float(data, "secondary_mass"),
         spin=_optional_float(data, "spin"),
+        model=str(data["model"]) if "model" in data else "FastKerrEccentricEquatorialFlux",
     )
     if "h_plus_reference" in data and "h_cross_reference" in data:
         reference = np.asarray(data["h_plus_reference"]) - 1j * np.asarray(

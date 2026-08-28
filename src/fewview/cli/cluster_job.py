@@ -16,6 +16,70 @@ DEFAULT_FRAMES = 1000
 # How many array tasks run at once when --max-concurrent is not given.
 DEFAULT_CONCURRENCY = 8
 
+RENDER_KEYS = (
+    "segments",
+    "frames",
+    "fps",
+    "component",
+    "flux_mode_combination",
+    "wave_cycles",
+    "animation_cycles",
+    "max_delay",
+    "start_time",
+    "end_time",
+    "normalization_time",
+    "normalization_samples",
+    "resolution",
+    "angular_sampling",
+    "polar_samples",
+    "azimuthal_samples",
+    "inner_window_fraction",
+    "outer_window_fraction",
+    "opacity_profile",
+    "color_scheme",
+    "presentation",
+    "color_exposure",
+    "background_color",
+    "opacity",
+    "shell_count",
+    "shell_min",
+    "shell_max",
+    "shell_width",
+    "shell_opacity_floor",
+    "shell_glow",
+    "smooth_sigma",
+    "opacity_unit_distance",
+    "width",
+    "height",
+    "image_scale",
+    "camera_view",
+    "camera_zoom",
+    "camera_orbit",
+    "camera_azimuth",
+    "camera_elevation",
+    "camera_latitude",
+    "camera_longitude",
+    "camera_latitude_end",
+    "camera_longitude_end",
+    "camera_zoom_end",
+    "camera_loop",
+    "starfield",
+    "star_count",
+    "bodies",
+    "trajectory",
+    "waveform_panel",
+    "waveform_transparent",
+    "trajectory_tail_cycles",
+    "trajectory_line_width",
+    "trajectory_color",
+    "body_exaggeration",
+    "trajectory_tube",
+    "orbit_display_radius",
+    "waveform_fraction",
+    "waveform_font_style",
+    "waveform_style_file",
+)
+
 
 def _positive(value: str) -> int:
     parsed = int(value)
@@ -212,6 +276,7 @@ def build_parser() -> argparse.ArgumentParser:
             "cool",
             "blues",
             "cinematic",
+            "ice",
         ),
         default="rainbow",
     )
@@ -240,7 +305,60 @@ def build_parser() -> argparse.ArgumentParser:
         default="oblique",
     )
     render.add_argument("--camera-zoom", type=float, default=0.95)
-    render.add_argument("--camera-orbit", type=float, default=0.0)
+    render.add_argument(
+        "--camera-orbit",
+        type=float,
+        default=0.0,
+        help="animate a pure azimuth sweep (degrees) over the movie",
+    )
+    render.add_argument(
+        "--camera-azimuth",
+        type=float,
+        default=0.0,
+        help="relative azimuth offset (degrees) on top of --camera-view",
+    )
+    render.add_argument(
+        "--camera-elevation",
+        type=float,
+        default=0.0,
+        help="relative elevation offset (degrees) on top of --camera-view",
+    )
+    render.add_argument(
+        "--camera-latitude",
+        type=float,
+        default=None,
+        help="absolute camera latitude (degrees above the equatorial plane)",
+    )
+    render.add_argument(
+        "--camera-longitude",
+        type=float,
+        default=None,
+        help="absolute camera azimuth (degrees from +x); pairs with --camera-latitude",
+    )
+    render.add_argument(
+        "--camera-latitude-end",
+        type=float,
+        default=None,
+        help="fly the camera to this latitude by the final frame (the peak with --camera-loop)",
+    )
+    render.add_argument(
+        "--camera-longitude-end",
+        type=float,
+        default=None,
+        help="fly the camera to this longitude by the final frame",
+    )
+    render.add_argument(
+        "--camera-zoom-end",
+        type=float,
+        default=None,
+        help="zoom factor to reach by the final frame (larger = more magnified)",
+    )
+    render.add_argument(
+        "--camera-loop",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="fly a full 360 degrees back to the start, rising to --camera-latitude-end and back",
+    )
     render.add_argument(
         "--starfield", action=argparse.BooleanOptionalAction, default=None
     )
@@ -253,6 +371,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     render.add_argument(
         "--waveform-panel", action=argparse.BooleanOptionalAction, default=True
+    )
+    render.add_argument(
+        "--waveform-transparent",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="composite the strain panel over the scene (default) instead of an opaque strip",
     )
     render.add_argument("--trajectory-tail-cycles", type=float, default=2.0)
     render.add_argument("--trajectory-line-width", type=float, default=1.6)
@@ -345,6 +469,10 @@ def _worker_arguments(
         args.camera_view,
         "--camera-orbit",
         str(args.camera_orbit),
+        "--camera-azimuth",
+        str(args.camera_azimuth),
+        "--camera-elevation",
+        str(args.camera_elevation),
         "--trajectory-tail-cycles",
         str(args.trajectory_tail_cycles),
         "--trajectory-line-width",
@@ -363,6 +491,10 @@ def _worker_arguments(
         "--trajectory" if args.trajectory else "--no-trajectory",
         "--trajectory-tube" if args.trajectory_tube else "--no-trajectory-tube",
         "--waveform-panel" if args.waveform_panel else "--no-waveform-panel",
+        "--camera-loop" if args.camera_loop else "--no-camera-loop",
+        "--waveform-transparent"
+        if args.waveform_transparent
+        else "--no-waveform-transparent",
     ]
     if args.starfield is not None:
         values.append("--starfield" if args.starfield else "--no-starfield")
@@ -377,12 +509,30 @@ def _worker_arguments(
         "color_exposure",
         "background_color",
         "camera_zoom",
+        "camera_latitude",
+        "camera_longitude",
+        "camera_latitude_end",
+        "camera_longitude_end",
+        "camera_zoom_end",
         "star_count",
     ):
         value = getattr(args, name)
         if value is not None:
             values.extend((f"--{name.replace('_', '-')}", str(value)))
     return values
+
+
+def _run_fingerprint(args, render_keys, modes, mode_stat):
+    """Return a short hash identifying the render configuration."""
+    fingerprint_source = repr(
+        (
+            str(modes),
+            mode_stat.st_size,
+            mode_stat.st_mtime_ns,
+            tuple((key, getattr(args, key)) for key in render_keys),
+        )
+    )
+    return hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:12]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -424,70 +574,8 @@ def main(argv: list[str] | None = None) -> int:
         args.segments,
         args.max_concurrent or DEFAULT_CONCURRENCY,
     )
-    render_keys = (
-        "segments",
-        "frames",
-        "fps",
-        "component",
-        "flux_mode_combination",
-        "wave_cycles",
-        "animation_cycles",
-        "max_delay",
-        "start_time",
-        "end_time",
-        "normalization_time",
-        "normalization_samples",
-        "resolution",
-        "angular_sampling",
-        "polar_samples",
-        "azimuthal_samples",
-        "inner_window_fraction",
-        "outer_window_fraction",
-        "opacity_profile",
-        "color_scheme",
-        "presentation",
-        "color_exposure",
-        "background_color",
-        "opacity",
-        "shell_count",
-        "shell_min",
-        "shell_max",
-        "shell_width",
-        "shell_opacity_floor",
-        "shell_glow",
-        "smooth_sigma",
-        "opacity_unit_distance",
-        "width",
-        "height",
-        "image_scale",
-        "camera_view",
-        "camera_zoom",
-        "camera_orbit",
-        "starfield",
-        "star_count",
-        "bodies",
-        "trajectory",
-        "waveform_panel",
-        "trajectory_tail_cycles",
-        "trajectory_line_width",
-        "trajectory_color",
-        "body_exaggeration",
-        "trajectory_tube",
-        "orbit_display_radius",
-        "waveform_fraction",
-        "waveform_font_style",
-        "waveform_style_file",
-    )
     mode_stat = modes.stat()
-    fingerprint_source = repr(
-        (
-            str(modes),
-            mode_stat.st_size,
-            mode_stat.st_mtime_ns,
-            tuple((key, getattr(args, key)) for key in render_keys),
-        )
-    )
-    run_id = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:12]
+    run_id = _run_fingerprint(args, RENDER_KEYS, modes, mode_stat)
     logs_dir = job_dir / "logs"
     segments_dir = job_dir / "segments" / run_id
     logs_dir.mkdir(parents=True, exist_ok=True)

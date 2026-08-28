@@ -1,15 +1,21 @@
 import unittest
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
 from fewview._core import (
     RelativisticModeWaveform,
+    _PRESET_CAMERA_DISTANCE,
     _PRIMARY_HALO_SCALE,
     _SECONDARY_BODY_SCALE,
+    _apply_camera_offset,
+    _camera_angle_vectors,
+    _combine_frame_and_panel,
     _normalization_frame_times,
     _normalize_render_field,
     _prepare_display_trajectory,
     _resolve_body_radii,
+    _resolve_opacity,
     _resolve_opacity_unit_distance,
     _resolve_volume_presentation,
     _smooth_render_field,
@@ -22,6 +28,7 @@ from fewview._core import (
     build_strain_surface,
     choose_max_delay,
     estimate_waveform_period,
+    generate_relativistic_mode_waveform,
     polarizations_from_complex,
 )
 
@@ -246,7 +253,7 @@ class VisualizationTest(unittest.TestCase):
         self.assertEqual(opacity[0], 0)
         self.assertGreater(int(np.max(opacity)), 0)
 
-    def test_flux_profile_logarithmically_expands_flux(self):
+    def test_flux_profile_gamma_lifts_and_threshold_gates(self):
         field = np.array([0.0, 1.0e-4, 1.0e-2, 1.0])
         display, limits = _normalize_render_field(
             field,
@@ -255,19 +262,135 @@ class VisualizationTest(unittest.TestCase):
             opacity_profile="flux",
         )
 
-        np.testing.assert_allclose(display, [0.0, 0.0, 0.5, 1.0])
+        # ``flux_gamma`` below one lifts the dim inter-crest values into the
+        # bright half of the colour map while the crest stays at 1 and the
+        # floor stays at 0.
+        np.testing.assert_allclose(display, field ** 0.6, rtol=1e-6)
+        self.assertEqual(display[0], 0.0)
+        self.assertEqual(display[-1], 1.0)
+        self.assertGreater(display[1], field[1])
         self.assertEqual(limits, (0.0, 1.0))
+
         opacity = _wavefront_opacity_transfer(
             "energy_flux",
             n_colors=512,
-            maximum_opacity=0.2,
+            maximum_opacity=0.5,
             profile="flux",
         )
-        self.assertEqual(opacity[0], 0)
-        self.assertGreater(int(opacity[256]), 0)
-        # Once visible, power is carried primarily by colour rather than a
-        # rapidly increasing opacity that can resemble a solid protrusion.
-        self.assertLess(float(opacity[-1]) / float(opacity[256]), 1.35)
+        values = np.linspace(0.0, 1.0, 512)
+        # The threshold gate keeps the dim troughs transparent while the bright
+        # crests turn solid; this is what turns a filled ball into flux shells.
+        self.assertEqual(int(opacity[0]), 0)
+        self.assertEqual(int(opacity[np.searchsorted(values, 0.20)]), 0)
+        self.assertGreater(int(opacity[np.searchsorted(values, 0.70)]), 0)
+        self.assertTrue(np.all(np.diff(opacity.astype(int)) >= 0))
+        self.assertGreaterEqual(int(opacity[-1]), int(0.5 * 255) - 1)
+
+    def test_flux_profile_threshold_and_gamma_validation(self):
+        with self.assertRaisesRegex(ValueError, "flux_gamma"):
+            _normalize_render_field(
+                np.array([0.0, 1.0]), "energy_flux", scale=1.0,
+                opacity_profile="flux", flux_gamma=0.0,
+            )
+        with self.assertRaisesRegex(ValueError, "flux_threshold"):
+            _wavefront_opacity_transfer(
+                "energy_flux", n_colors=64, maximum_opacity=0.5,
+                profile="flux", flux_threshold=1.0,
+            )
+
+    def test_flux_profile_has_a_higher_default_opacity(self):
+        self.assertAlmostEqual(_resolve_opacity(None, "flux"), 0.55)
+        self.assertAlmostEqual(_resolve_opacity(None, "shells"), 0.30)
+        self.assertAlmostEqual(_resolve_opacity(None, "soft"), 0.11)
+        self.assertAlmostEqual(_resolve_opacity(0.42, "flux"), 0.42)
+
+    def test_apply_camera_offset_rotates_only_when_requested(self):
+        class _Camera:
+            def __init__(self):
+                self.calls = []
+
+            def Azimuth(self, angle):
+                self.calls.append(("azimuth", angle))
+
+            def Elevation(self, angle):
+                self.calls.append(("elevation", angle))
+
+            def OrthogonalizeViewUp(self):
+                self.calls.append(("orthogonalize",))
+
+        class _Plotter:
+            def __init__(self):
+                self.camera = _Camera()
+
+        # A zero offset must leave the preset camera untouched.
+        idle = _Plotter()
+        _apply_camera_offset(idle, 0.0, 0.0)
+        self.assertEqual(idle.camera.calls, [])
+
+        # Both angles: orbit, then tilt, then re-level the horizon.
+        both = _Plotter()
+        _apply_camera_offset(both, 30.0, -15.0)
+        self.assertEqual(
+            both.camera.calls,
+            [("azimuth", 30.0), ("elevation", -15.0), ("orthogonalize",)],
+        )
+
+        # Only elevation requested: azimuth is skipped.
+        tilt = _Plotter()
+        _apply_camera_offset(tilt, 0.0, 20.0)
+        self.assertEqual(
+            tilt.camera.calls, [("elevation", 20.0), ("orthogonalize",)]
+        )
+
+    def test_camera_angle_vectors_place_the_camera_at_absolute_angles(self):
+        radius = 2.0
+        position, view_up = _camera_angle_vectors(radius, 45.0, 30.0)
+        position = np.asarray(position)
+        distance = np.linalg.norm(position)
+
+        latitude = np.degrees(np.arcsin(position[2] / distance))
+        longitude = np.degrees(np.arctan2(position[1], position[0]))
+        self.assertAlmostEqual(latitude, 45.0, places=6)
+        self.assertAlmostEqual(longitude, 30.0, places=6)
+        # Distance scales with the volume radius so framing tracks the presets.
+        self.assertAlmostEqual(distance, _PRESET_CAMERA_DISTANCE * radius, places=6)
+        # Away from the poles the spin axis is the view-up reference.
+        self.assertEqual(tuple(view_up), (0.0, 0.0, 1.0))
+
+        # At the equator the camera lies in the equatorial plane.
+        equator, _ = _camera_angle_vectors(1.0, 0.0, 90.0)
+        self.assertAlmostEqual(equator[2], 0.0, places=6)
+
+        # Near a pole a horizontal up replaces the (degenerate) spin axis.
+        _, polar_up = _camera_angle_vectors(1.0, 90.0, 0.0)
+        self.assertAlmostEqual(polar_up[2], 0.0, places=6)
+
+    def test_combine_frame_and_panel_stacks_opaque_but_composites_transparent(self):
+        image = np.full((20, 8, 3), 100, dtype=np.uint8)
+
+        # An opaque (RGB) panel is stacked beneath the scene, growing the frame.
+        opaque = np.full((5, 8, 3), 200, dtype=np.uint8)
+        stacked = _combine_frame_and_panel(image, opaque)
+        self.assertEqual(stacked.shape, (25, 8, 3))
+        np.testing.assert_array_equal(stacked[:20], image)
+        np.testing.assert_array_equal(stacked[20:], opaque)
+
+        # A transparent (RGBA) panel is alpha-composited over the bottom rows of
+        # a full-height render, so the frame keeps its height and the scene
+        # shows through wherever the panel is transparent.
+        panel = np.zeros((5, 8, 4), dtype=np.uint8)
+        panel[..., :3] = 240
+        panel[2, :, 3] = 255  # one fully opaque row; the rest stay transparent
+        out = _combine_frame_and_panel(image, panel)
+        self.assertEqual(out.shape, (20, 8, 3))
+        np.testing.assert_array_equal(out[:15], image[:15])  # untouched above
+        np.testing.assert_array_equal(
+            out[17], np.full((8, 3), 240, dtype=np.uint8)
+        )  # opaque panel row overwrites the scene
+        np.testing.assert_array_equal(out[15], image[15])  # transparent row kept
+
+        with self.assertRaisesRegex(RuntimeError, "width"):
+            _combine_frame_and_panel(image, np.zeros((5, 9, 4), dtype=np.uint8))
 
     def test_opacity_accumulation_distance_is_resolution_independent(self):
         self.assertAlmostEqual(_resolve_opacity_unit_distance(2.5, None), 0.1)
@@ -527,6 +650,118 @@ class VisualizationTest(unittest.TestCase):
         primary, secondary, _, _ = self._drawn_bodies(waveform)
         self.assertLess(primary, 0.043)
         self.assertAlmostEqual(secondary / primary, 0.014 / 0.043)
+
+
+class PostAdiabaticBranchTest(unittest.TestCase):
+    """Test the Trajectory1PAT1R (post-adiabatic) branch in generate_relativistic_mode_waveform."""
+
+    def _build_mock_generator(self, n_sparse=10, n_modes=2):
+        """Build a mock FEW generator that mimics a Waveform1PAT1R model."""
+
+        t_sparse = np.linspace(0.0, 100.0, n_sparse)
+        p_sparse = np.linspace(10.0, 9.0, n_sparse)
+        e_sparse = np.zeros(n_sparse)
+        xI_sparse = np.ones(n_sparse)
+        Phi_phi_sparse = np.linspace(0.0, 6.0, n_sparse)
+        Phi_theta_sparse = np.zeros(n_sparse)
+        Phi_r_sparse = np.linspace(0.0, 3.0, n_sparse)
+        delta_m1_sparse = np.linspace(0.0, 0.01, n_sparse)
+        chit_sparse = np.linspace(0.0, 0.001, n_sparse)  # stored as delta
+
+        # Nine-column trajectory for post-adiabatic models
+        trajectory = [
+            t_sparse, p_sparse, e_sparse, xI_sparse,
+            Phi_phi_sparse, Phi_theta_sparse, Phi_r_sparse,
+            delta_m1_sparse, chit_sparse,
+        ]
+
+        # A mock class whose __name__ is "Trajectory1PAT1R"
+        class Trajectory1PAT1R:
+            args = {"chit1": 0.9, "nu": 1e-5, "chit2": 0.0}
+
+        # Build the mock generator hierarchy
+        generator = MagicMock()
+        type(generator).__name__ = "Waveform1PAT1R"
+        generator.inspiral_kwargs = {}
+        generator.sanity_check_init.return_value = (0.9, 1.0)
+        generator.sanity_check_traj.return_value = None
+        generator.inspiral_generator.return_value = trajectory
+        generator.inspiral_generator.func = Trajectory1PAT1R()
+
+        # Dense trajectory: columns are p, e, xI, Phi_phi, Phi_theta, Phi_r
+        n_dense = int((t_sparse[-1] - t_sparse[0]) / 10.0) + 1
+        dense = np.zeros((n_dense, 6))
+        dense[:, 0] = np.linspace(10.0, 9.0, n_dense)  # p
+        dense[:, 2] = 1.0  # xI
+        dense[:, 3] = np.linspace(0.0, 6.0, n_dense)  # Phi_phi
+        dense[:, 5] = np.linspace(0.0, 3.0, n_dense)  # Phi_r
+        generator.inspiral_generator.inspiral_generator.eval_integrator_spline.return_value = dense
+
+        # Amplitude generator with get_amplitudes for the post-adiabatic path
+        amp_gen = generator.amplitude_generator
+        amplitudes = np.random.default_rng(42).random((n_sparse, n_modes))
+        amp_gen.get_amplitudes.return_value = amplitudes
+        amp_gen.l_arr_no_mask = np.array([2, 2])
+        amp_gen.m_arr_no_mask = np.array([2, 1])
+        amp_gen.n_arr_no_mask = np.array([0, 0])
+
+        return generator
+
+    @patch("fewview._core._resolve_few_model")
+    def test_post_adiabatic_trajectory_is_unpacked(self, mock_resolve):
+        """The nine-column trajectory is correctly unpacked and amplitudes use evolving spin."""
+
+        mock_generator = self._build_mock_generator()
+        mock_resolve.return_value = mock_generator
+
+        # Mock the constants imported inside the function
+        constants_mock = MagicMock()
+        constants_mock.Gpc = 3.086e25
+        constants_mock.MRSUN_SI = 1477.0
+
+        with patch.dict("sys.modules", {"few.utils.constants": constants_mock}):
+            waveform = generate_relativistic_mode_waveform(
+                M=1e6, mu=10.0, a=0.9, p0=10.0, e0=0.0, T=0.001, dt=10.0,
+                model="Waveform1PAT1R",
+            )
+
+        self.assertIsInstance(waveform, RelativisticModeWaveform)
+        self.assertEqual(waveform.model, "Waveform1PAT1R")
+        # Verify the post-adiabatic amplitude path was used
+        mock_generator.amplitude_generator.get_amplitudes.assert_called_once()
+        call_kwargs = mock_generator.amplitude_generator.get_amplitudes.call_args
+        # Should have nu, chit2, chit, delta_m1 keyword arguments
+        self.assertIn("nu", call_kwargs.kwargs)
+        self.assertIn("chit2", call_kwargs.kwargs)
+        self.assertIn("chit", call_kwargs.kwargs)
+        self.assertIn("delta_m1", call_kwargs.kwargs)
+        # chit should be delta + chit1 baseline
+        chit_passed = call_kwargs.kwargs["chit"]
+        expected_chit1 = 0.9
+        self.assertTrue(np.all(chit_passed >= expected_chit1 - 1e-10))
+
+    @patch("fewview._core._resolve_few_model")
+    def test_post_adiabatic_waveform_has_modes(self, mock_resolve):
+        """Post-adiabatic branch produces a waveform with the expected mode structure."""
+
+        mock_generator = self._build_mock_generator()
+        mock_resolve.return_value = mock_generator
+
+        constants_mock = MagicMock()
+        constants_mock.Gpc = 3.086e25
+        constants_mock.MRSUN_SI = 1477.0
+
+        with patch.dict("sys.modules", {"few.utils.constants": constants_mock}):
+            waveform = generate_relativistic_mode_waveform(
+                M=1e6, mu=10.0, a=0.9, p0=10.0, e0=0.0, T=0.001, dt=10.0,
+                model="Waveform1PAT1R",
+            )
+
+        # Should have modes with negative-m partners included
+        self.assertGreater(waveform.modes.shape[1], 0)
+        self.assertEqual(waveform.time.shape[0], waveform.modes.shape[0])
+        # Trajectory should be populated
+        self.assertTrue(waveform.has_trajectory)
 
 
 if __name__ == "__main__":

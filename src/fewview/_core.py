@@ -65,6 +65,7 @@ _MATPLOTLIB_COLOR_SCHEMES = {
 _VOLUME_COLOR_SCHEMES = frozenset(_MATPLOTLIB_COLOR_SCHEMES) | {
     "rainbow",
     "cinematic",
+    "ice",
 }
 PathLike = Union[str, Path]
 
@@ -78,6 +79,62 @@ DEFAULT_TRAJECTORY_COLOR = "#ffd36a"
 # secondary's own horizon is ~1e-5 of the primary's, so it is a legibility
 # choice, not a scale; this ratio matches the hand-tuned circular-orbit look.
 _SECONDARY_BODY_SCALE = 0.33
+
+
+# Default max opacity when the caller does not set one. The nested translucent
+# ``shells`` sheets and the threshold-gated ``flux`` crests both need more than
+# the broad ``soft``/``bands`` fronts to read at a comparable brightness.
+_SHELLS_DEFAULT_OPACITY = 0.30
+_FLUX_DEFAULT_OPACITY = 0.55
+_DEFAULT_OPACITY = 0.11
+
+
+def _resolve_opacity(opacity, opacity_profile):
+    """Return the max opacity, applying a profile-aware default when unset."""
+
+    if opacity is not None:
+        return opacity
+    if opacity_profile == "shells":
+        return _SHELLS_DEFAULT_OPACITY
+    if opacity_profile == "flux":
+        return _FLUX_DEFAULT_OPACITY
+    return _DEFAULT_OPACITY
+
+
+def paper_style_file() -> str:
+    """Return the path to Fewview's bundled LaTeX (Computer Modern) mplstyle.
+
+    Fewview's Matplotlib figures use it by default. Apply it to your own plots
+    for a matching look::
+
+        import matplotlib.pyplot as plt
+        import fewview
+
+        plt.style.use(fewview.paper_style_file())
+
+    It relies on Matplotlib's bundled ``cmr10`` font and ``cm`` mathtext, so no
+    LaTeX installation is required.
+    """
+
+    return str(Path(__file__).resolve().parent / "styles" / "fewview-paper.mplstyle")
+
+
+# Font rcParams for the LaTeX look, used where a full stylesheet would fight the
+# element's own layout (the waveform panel). Mirrors the bundled stylesheet's
+# Computer Modern choice; falls back gracefully if cmr10 is unavailable.
+_LATEX_FONT_RC = {
+    "font.family": "serif",
+    "font.serif": ["cmr10", "Computer Modern Roman", "STIXGeneral", "DejaVu Serif"],
+    "mathtext.fontset": "cm",
+    "axes.formatter.use_mathtext": True,
+    "axes.unicode_minus": False,
+    "text.usetex": False,
+}
+
+# Panel width (px) the absolute font/line sizes below were tuned at; sizes scale
+# linearly with the rendered panel height relative to this so labels keep the
+# same visual fraction at any resolution (e.g. 4K).
+_PANEL_REFERENCE_HEIGHT = 158.0
 
 
 @dataclass(frozen=True)
@@ -214,16 +271,27 @@ class RelativisticModeWaveform:
             )
         )
 
-    def orbital_position(self) -> np.ndarray:
-        r"""Return the osculating equatorial trajectory in units of ``M``.
+    def orbital_position(self, method: str = "exact") -> np.ndarray:
+        r"""Return the equatorial secondary trajectory in units of ``M``.
 
-        The Boyer--Lindquist radial coordinate is reconstructed from FEW's
-        relativistic trajectory as
-        :math:`r=p/(1+e\cos\Phi_r)`.  The azimuth is FEW's accumulated
-        :math:`\Phi_\phi`; this is a display coordinate transformation, not a
-        separate approximate waveform model.
+        Args:
+            method: ``"exact"`` (default) reconstructs the true Boyer--Lindquist
+                coordinates of the osculating Kerr geodesic from FEW's action
+                angles via the Lynch & Burke conversion (`arXiv:2411.04955
+                <https://arxiv.org/abs/2411.04955>`_); see
+                :mod:`fewview.geodesic`. ``"approx"`` uses the quick display
+                mapping :math:`r=p/(1+e\cos\Phi_r)`, :math:`\phi=\Phi_\phi`,
+                which mis-locates the radial phase by tens of percent of the
+                radial range. ``"exact"`` falls back to ``"approx"`` when the
+                waveform carries no spin (mode files written before it was
+                recorded).
+
+        Returns:
+            An ``(N, 3)`` array of Cartesian ``(x, y, 0)`` positions in ``M``.
         """
 
+        if method not in ("exact", "approx"):
+            raise ValueError("method must be 'exact' or 'approx'")
         if not self.has_trajectory:
             raise ValueError(
                 "This mode waveform does not include a FEW trajectory. "
@@ -232,9 +300,18 @@ class RelativisticModeWaveform:
         _validate_mode_waveform(self)
         p = np.asarray(self.trajectory_p, dtype=float)
         e = np.asarray(self.trajectory_e, dtype=float)
-        phi = np.asarray(self.trajectory_phi_phi, dtype=float)
+        phi_phi = np.asarray(self.trajectory_phi_phi, dtype=float)
         phi_r = np.asarray(self.trajectory_phi_r, dtype=float)
-        radial_position = p / (1.0 + e * np.cos(phi_r))
+
+        if method == "exact" and self.spin is not None:
+            from .geodesic import boyer_lindquist_equatorial
+
+            radial_position, phi = boyer_lindquist_equatorial(
+                float(self.spin), p, e, phi_r, phi_phi
+            )
+        else:
+            radial_position = p / (1.0 + e * np.cos(phi_r))
+            phi = phi_phi
         return np.column_stack(
             (
                 radial_position * np.cos(phi),
@@ -293,6 +370,28 @@ def polarizations_from_complex(
     raise ValueError("convention must be 'few' or 'summation'")
 
 
+def _resolve_few_model(model, lmax, nmax, force_backend):
+    """Return an instantiated FEW mode-resolved waveform model.
+
+    ``model`` is either the name of a class in :mod:`few.waveform` or an
+    already-instantiated FEW waveform object (returned unchanged).
+    """
+
+    if not isinstance(model, str):
+        return model
+    from few.waveform import waveform as few_waveform
+
+    model_cls = getattr(few_waveform, model, None)
+    if model_cls is None:
+        raise ValueError(f"unknown FEW waveform model {model!r}")
+    try:
+        return model_cls(lmax=lmax, nmax=nmax, force_backend=force_backend)
+    except TypeError:
+        # Models that do not take lmax/nmax (e.g. Waveform1PAT1R) select modes
+        # through a mode selector instead.
+        return model_cls(force_backend=force_backend)
+
+
 def generate_relativistic_mode_waveform(
     M: float,
     mu: float,
@@ -312,14 +411,22 @@ def generate_relativistic_mode_waveform(
     max_teukolsky_modes: Optional[int] = None,
     interpolation_chunk_size: int = 256,
     force_backend: str = "cpu",
+    model: "str | object" = "FastKerrEccentricEquatorialFlux",
 ) -> RelativisticModeWaveform:
-    """Generate full-sky modes with FEW's relativistic Kerr flux model.
+    r"""Generate full-sky modes with a FEW mode-resolved waveform model.
 
-    This follows :class:`few.waveform.FastKerrEccentricEquatorialFlux` exactly:
-    a relativistic Kerr flux trajectory supplies the phases, the Teukolsky
-    interpolant supplies complex ``(l,m,n)`` amplitudes, and the radial
-    harmonics are combined into uniformly sampled ``(l,m)`` modes.  With the
-    default ``power_fraction=1`` and no mode cap, all available modes are used.
+    A FEW trajectory supplies the phases, the model's amplitude module supplies
+    complex ``(l,m,n)`` amplitudes, and the harmonics are combined into
+    uniformly sampled ``(l,m)`` modes.  With the default ``power_fraction=1``
+    and no mode cap, all available modes are used.
+
+    ``model`` selects the FEW waveform model. It may be the name of a class in
+    :mod:`few.waveform` (default ``"FastKerrEccentricEquatorialFlux"``) or an
+    already-instantiated FEW waveform object, which lets you configure a model
+    however you like before handing it in. Any mode-resolved
+    ``SphericalHarmonicWaveformBase`` model is supported, including the flux
+    family and the post-adiabatic ``Waveform1PAT1R`` (a circular model that
+    evolves the primary's mass and spin).
 
     ``power_fraction`` and ``max_teukolsky_modes`` are optional rendering-speed
     controls.  Selection is based on sky-integrated mode power, including the
@@ -340,13 +447,8 @@ def generate_relativistic_mode_waveform(
     from scipy.interpolate import CubicSpline
 
     from few.utils.constants import Gpc, MRSUN_SI
-    from few.waveform.waveform import FastKerrEccentricEquatorialFlux
 
-    generator = FastKerrEccentricEquatorialFlux(
-        lmax=lmax,
-        nmax=nmax,
-        force_backend=force_backend,
-    )
+    generator = _resolve_few_model(model, lmax, nmax, force_backend)
     a, xI0 = generator.sanity_check_init(M, mu, a, p0, e0, xI0)
     trajectory = generator.inspiral_generator(
         M,
@@ -362,16 +464,43 @@ def generate_relativistic_mode_waveform(
         dt=dt,
         **generator.inspiral_kwargs,
     )
-    t_sparse, p, e, xI, _, _, _ = (_as_numpy(value) for value in trajectory)
-    generator.sanity_check_traj(a, p, e, xI)
-
     amplitude_generator = generator.amplitude_generator
-    amplitudes = _as_numpy(amplitude_generator(a, p, e, xI0))
+
+    # Post-adiabatic models (Trajectory1PAT1R) also evolve the primary's mass
+    # and spin, so the trajectory carries two extra columns and the amplitudes
+    # depend on the instantaneous spin; the flux family does not.
+    evolves_primary = (
+        type(generator.inspiral_generator.func).__name__ == "Trajectory1PAT1R"
+    )
+    if evolves_primary:
+        t_sparse, p, e, xI, _, _, _, delta_m1, chit = (
+            _as_numpy(value) for value in trajectory
+        )
+        ode_args = generator.inspiral_generator.func.args
+        chit = chit + float(ode_args["chit1"])  # stored as delta chit1
+        generator.sanity_check_traj(a, p, e, xI)
+        amplitudes = _as_numpy(
+            amplitude_generator.get_amplitudes(
+                a,
+                p,
+                e,
+                xI,
+                nu=float(ode_args["nu"]),
+                chit2=float(ode_args["chit2"]),
+                chit=chit,
+                delta_m1=delta_m1,
+            )
+        )
+    else:
+        t_sparse, p, e, xI, _, _, _ = (_as_numpy(value) for value in trajectory)
+        generator.sanity_check_traj(a, p, e, xI)
+        amplitudes = _as_numpy(amplitude_generator(a, p, e, xI0))
+
     # Label the amplitude columns from the amplitude module's own index arrays,
     # not the outer generator's. The amplitude model is trained to a fixed
-    # ``nmax`` (currently 55), so a larger requested ``nmax`` leaves the
-    # generator's ``*_arr_no_mask`` describing more modes than the amplitude
-    # module actually returns, and the two no longer line up.
+    # ``nmax``, so a larger requested ``nmax`` leaves the generator's
+    # ``*_arr_no_mask`` describing more modes than the amplitude module actually
+    # returns, and the two no longer line up.
     ell_all = _as_numpy(amplitude_generator.l_arr_no_mask).astype(
         np.int32, copy=False
     )
@@ -388,7 +517,9 @@ def generate_relativistic_mode_waveform(
             f"({ell_all.shape[0]} labels for {available} modes)"
         )
     amplitude_nmax = int(np.abs(n_all).max())
-    if nmax > amplitude_nmax:
+    # Only meaningful for eccentric models that use radial harmonics; a circular
+    # model (amplitude_nmax == 0) has no radial overtones to cap.
+    if amplitude_nmax > 0 and nmax > amplitude_nmax:
         warnings.warn(
             f"The amplitude model is trained to nmax={amplitude_nmax}, so the "
             f"requested nmax={nmax} was capped; {available} Teukolsky modes "
@@ -477,6 +608,7 @@ def generate_relativistic_mode_waveform(
         primary_mass=float(M),
         secondary_mass=float(mu),
         spin=float(a),
+        model=type(generator).__name__,
     )
 
 
@@ -1199,10 +1331,31 @@ def plot_strain_surface(
 ):
     """Plot a :class:`StrainSurface` with Matplotlib.
 
+    When Fewview creates the figure (``ax`` is ``None``) it applies the bundled
+    LaTeX paper style; pass your own ``ax`` to keep your figure's styling.
+
     Returns:
         ``(figure, axes)`` so callers can further customize or save the plot.
     """
 
+    import contextlib
+
+    import matplotlib.pyplot as plt
+
+    with (
+        plt.style.context(paper_style_file())
+        if ax is None
+        else contextlib.nullcontext()
+    ):
+        return _plot_strain_surface_body(
+            surface, ax=ax, cmap=cmap, colorbar=colorbar,
+            view_elevation=view_elevation, view_azimuth=view_azimuth,
+        )
+
+
+def _plot_strain_surface_body(
+    surface, *, ax, cmap, colorbar, view_elevation, view_azimuth
+):
     import matplotlib.pyplot as plt
     from matplotlib.cm import ScalarMappable
     from matplotlib.colors import Normalize
@@ -1255,13 +1408,32 @@ def plot_volume_slice(
     cmap: str = "coolwarm",
     colorbar: bool = True,
 ):
-    """Plot a central slice through a retarded-time volume with Matplotlib."""
+    """Plot a central slice through a retarded-time volume with Matplotlib.
+
+    When Fewview creates the figure (``ax`` is ``None``) it applies the bundled
+    LaTeX paper style; pass your own ``ax`` to keep your figure's styling.
+    """
+
+    import contextlib
 
     import matplotlib.pyplot as plt
-    from matplotlib.colors import Normalize
 
     if plane not in ("xy", "xz", "yz"):
         raise ValueError("plane must be 'xy', 'xz', or 'yz'")
+    with (
+        plt.style.context(paper_style_file())
+        if ax is None
+        else contextlib.nullcontext()
+    ):
+        return _plot_volume_slice_body(
+            volume, component=component, plane=plane, ax=ax, cmap=cmap, colorbar=colorbar
+        )
+
+
+def _plot_volume_slice_body(volume, *, component, plane, ax, cmap, colorbar):
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import Normalize
+
     field = volume.component(component)
     display_name = component.replace("_", " ")
     if plane == "xy":
@@ -1355,6 +1527,71 @@ def to_pyvista(volume: RetardedTimeVolume):
     grid.point_data["amplitude"] = volume.amplitude.ravel(order="F")
     grid.point_data["energy_flux"] = volume.energy_flux.ravel(order="F")
     return grid
+
+
+def _apply_camera_offset(
+    plotter, camera_azimuth: float, camera_elevation: float
+) -> None:
+    """Rotate the camera by fixed angle offsets about the current focal point.
+
+    ``camera_azimuth`` orbits the camera horizontally (about the view-up axis)
+    and ``camera_elevation`` tilts it vertically, both in degrees and applied on
+    top of the ``camera_view`` preset. The view-up vector is re-orthogonalized
+    afterwards so large tilts do not skew the horizon.
+    """
+
+    if camera_azimuth == 0.0 and camera_elevation == 0.0:
+        return
+    camera = plotter.camera
+    if camera_azimuth != 0.0:
+        camera.Azimuth(float(camera_azimuth))
+    if camera_elevation != 0.0:
+        camera.Elevation(float(camera_elevation))
+    camera.OrthogonalizeViewUp()
+
+
+# The preset cameras sit at this distance (in units of the volume radius); the
+# oblique preset is at |(2, -4.2, 1)| and the absolute-angle placement matches
+# it so ``camera_zoom`` and framing stay consistent across camera modes.
+_PRESET_CAMERA_DISTANCE = float(np.sqrt(2.0**2 + 4.2**2 + 1.0**2))
+
+# Perspective field of view before ``camera_zoom`` is applied. A zoom factor z
+# maps to a view angle of ``_CAMERA_VIEW_ANGLE / z`` (PyVista's ``camera.zoom``
+# divides the angle), so animating the view angle this way gives absolute,
+# non-compounding zoom control frame to frame.
+_CAMERA_VIEW_ANGLE = 26.5
+
+
+def _camera_angle_vectors(
+    radius: float,
+    latitude: float,
+    longitude: float,
+    *,
+    distance: Optional[float] = None,
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Return the ``(position, view_up)`` for an absolute camera angle.
+
+    ``latitude`` is degrees above the equatorial plane and ``longitude`` is the
+    azimuth in degrees measured from the ``+x`` axis toward ``+y``. The spin
+    axis is used as the view-up reference, except within one degree of a pole
+    where it becomes parallel to the view direction and a horizontal up is used
+    instead.
+    """
+
+    lat = np.deg2rad(latitude)
+    lon = np.deg2rad(longitude)
+    span = _PRESET_CAMERA_DISTANCE * radius if distance is None else float(distance)
+    position = (
+        span * np.cos(lat) * np.cos(lon),
+        span * np.cos(lat) * np.sin(lon),
+        span * np.sin(lat),
+    )
+    view_up = (
+        -np.sin(lat) * np.cos(lon),
+        -np.sin(lat) * np.sin(lon),
+        np.cos(lat),
+    )
+    return position, view_up
 
 
 def _validate_volume_presentation(
@@ -1485,19 +1722,25 @@ def render_volume(
     presentation: VolumePresentation = "balanced",
     color_exposure: Optional[float] = None,
     background_color: Optional[str] = None,
-    opacity: float = 0.11,
+    opacity: Optional[float] = None,
     shell_count: int = 7,
     shell_min: float = 0.10,
     shell_max: float = 0.92,
     shell_width: float = 0.075,
     shell_opacity_floor: float = 0.16,
     shell_glow: float = 0.12,
+    flux_gamma: float = 0.6,
+    flux_threshold: float = 0.35,
     smooth_sigma: float = 0.65,
     opacity_unit_distance: Optional[float] = None,
     window_size: tuple[int, int] = (1600, 900),
     image_scale: int = 1,
     camera_view: VolumeCameraView = "oblique",
     camera_zoom: Optional[float] = None,
+    camera_azimuth: float = 0.0,
+    camera_elevation: float = 0.0,
+    camera_latitude: Optional[float] = None,
+    camera_longitude: Optional[float] = None,
     starfield: Optional[bool] = None,
     star_count: Optional[int] = None,
     source_marker: bool = False,
@@ -1508,8 +1751,10 @@ def render_volume(
     The default ``"cinematic"`` style uses direct shaded volume rendering,
     smooth scalar interpolation, a dark background, and a presentation camera.
     ``opacity_profile="shells"`` exposes positive signed-strain crests in narrow
-    coloured bands. ``opacity_profile="flux"`` logarithmically compresses the
-    energy-flux proxy and gives it a broad opacity ramp. Unlike a stack of
+    coloured bands. ``opacity_profile="flux"`` gates opacity on the energy-flux
+    crests so the outgoing flux shells read as luminous sheets with the
+    equatorial null showing through; it looks best with ``component="energy_flux"``,
+    ``presentation="shells_dramatic"``, and an oblique camera. Unlike a stack of
     extracted contour meshes, the translucent wavefronts remain continuous
     when viewed obliquely.
 
@@ -1531,13 +1776,21 @@ def render_volume(
         color_exposure: Colour-transfer exposure independent of opacity. Values
             above one brighten the palette without making the volume more solid.
         background_color: Optional Matplotlib-compatible render background.
-        opacity: Maximum opacity in the transfer function.
+        opacity: Maximum opacity in the transfer function. ``None`` (the
+            default) applies a profile-aware value: 0.55 for ``flux``, 0.30 for
+            ``shells``, and 0.11 otherwise.
         shell_count: Number of translucent positive-strain level sheets.
         shell_min: Normalized strain at the first shell.
         shell_max: Normalized strain at the final shell.
         shell_width: Normalized decay width behind each shell.
         shell_opacity_floor: First-shell opacity as a fraction of ``opacity``.
         shell_glow: Fractional soft halo added around each shell.
+        flux_gamma: ``flux`` profile only. Power applied to the normalized flux
+            before display. Values below one lift the dim inter-crest troughs
+            into the bright half of the colour map. Default ``0.6``.
+        flux_threshold: ``flux`` profile only. Normalized flux below which the
+            volume stays transparent, so only the bright crests read as shells.
+            Default ``0.35``; raise it to isolate the brightest lobes.
         smooth_sigma: Gaussian smoothing in voxel units for display only.
         opacity_unit_distance: Physical distance over which opacity accumulates.
             The default is four percent of the volume radius, so changing the
@@ -1548,6 +1801,19 @@ def render_volume(
             to look down the spin-frame axis. The face-on view collapses the
             unavoidable signed-polarization chart axis onto the source marker.
         camera_zoom: Optional camera zoom multiplier.
+        camera_azimuth: Degrees to orbit the camera horizontally (about the
+            view-up axis) on top of ``camera_view``. Default ``0``.
+        camera_elevation: Degrees to tilt the camera vertically on top of
+            ``camera_view``. Default ``0``. Keep the magnitude below ~85 to
+            avoid flipping the view over the pole.
+        camera_latitude: Absolute camera latitude in degrees above the
+            equatorial plane. When set (with or without ``camera_longitude``),
+            it replaces ``camera_view`` and places the camera at that exact
+            angle; ``camera_azimuth``/``camera_elevation`` still apply on top.
+            Must lie in ``[-90, 90]``.
+        camera_longitude: Absolute camera azimuth in degrees, measured from the
+            ``+x`` axis toward ``+y``. Pairs with ``camera_latitude``; if only
+            one is given the other defaults to ``0``.
         starfield: Add a deterministic background star field. The dramatic
             preset enables it unless explicitly disabled.
         star_count: Number of deterministic stars distributed around the scene.
@@ -1558,6 +1824,7 @@ def render_volume(
         The configured ``pyvista.Plotter``.
     """
 
+    opacity = _resolve_opacity(opacity, opacity_profile)
     if not 0.0 < opacity <= 1.0:
         raise ValueError("opacity must be in the interval (0, 1]")
     if style not in ("cinematic", "contours"):
@@ -1619,6 +1886,7 @@ def render_volume(
             display_field,
             component,
             opacity_profile=opacity_profile,
+            flux_gamma=flux_gamma,
         )
         render_name = f"{component}_render"
         grid.point_data[render_name] = display_field.ravel(order="F")
@@ -1634,6 +1902,7 @@ def render_volume(
             shell_width=shell_width,
             shell_opacity_floor=shell_opacity_floor,
             shell_glow=shell_glow,
+            flux_threshold=flux_threshold,
         )
         actor = plotter.add_volume(
             grid,
@@ -1689,7 +1958,14 @@ def render_volume(
         )
 
     r = volume.radius
-    if camera_view == "face_on":
+    if camera_latitude is not None or camera_longitude is not None:
+        latitude = 0.0 if camera_latitude is None else float(camera_latitude)
+        longitude = 0.0 if camera_longitude is None else float(camera_longitude)
+        if abs(latitude) > 90.0:
+            raise ValueError("camera_latitude must be in the interval [-90, 90]")
+        position, view_up = _camera_angle_vectors(r, latitude, longitude)
+        plotter.camera_position = [position, (0.0, 0.0, 0.0), view_up]
+    elif camera_view == "face_on":
         plotter.camera_position = [
             (0.0, 0.0, 4.75 * r),
             (0.0, 0.0, 0.0),
@@ -1702,8 +1978,9 @@ def render_volume(
             (0.0, 0.0, 1.0),
         ]
     plotter.camera.parallel_projection = False
-    plotter.camera.view_angle = 26.5
+    plotter.camera.view_angle = _CAMERA_VIEW_ANGLE
     plotter.camera.zoom(resolved_presentation.camera_zoom)
+    _apply_camera_offset(plotter, camera_azimuth, camera_elevation)
 
     screenshot_path = None if screenshot is None else str(Path(screenshot))
     if show:
@@ -1991,24 +2268,22 @@ class _WaveformPanelRenderer:
         font_style: WaveformFontStyle,
         style_file: Optional[PathLike],
         background_color: str,
+        transparent: bool = False,
     ) -> None:
         import matplotlib as mpl
         from matplotlib.backends.backend_agg import FigureCanvasAgg
         from matplotlib.figure import Figure
 
+        self.transparent = transparent
+        panel_face = "none" if transparent else background_color
         self.font_style = font_style
         self.style_file = None if style_file is None else str(Path(style_file))
-        self.font_rc = (
-            {
-                "font.family": "serif",
-                "font.serif": ["STIXGeneral"],
-                "mathtext.fontset": "stix",
-                "mathtext.default": "regular",
-                "text.usetex": False,
-            }
-            if font_style == "latex"
-            else {"text.usetex": False}
-        )
+        self.font_rc = dict(_LATEX_FONT_RC) if font_style == "latex" else {"text.usetex": False}
+        # Scale font and line sizes so labels keep a constant fraction of the
+        # panel at any resolution; a 4K panel is ~3x taller than the reference,
+        # so its text is ~3x larger in points and stays readable.
+        fs = max(height / _PANEL_REFERENCE_HEIGHT, 0.75)
+        self.fs = fs
 
         reference = waveform.strain(theta=theta, phi=phi)
         h_plus = np.real(reference)
@@ -2027,24 +2302,24 @@ class _WaveformPanelRenderer:
             figure = Figure(
                 figsize=(width / dpi, height / dpi),
                 dpi=dpi,
-                facecolor=background_color,
+                facecolor=panel_face,
             )
             self.canvas = FigureCanvasAgg(figure)
             self.axis = figure.add_axes((0.055, 0.27, 0.92, 0.66))
-            self.axis.set_facecolor(background_color)
-            self.axis.axhline(0.0, color="#20313a", linewidth=0.7, zorder=0)
+            self.axis.set_facecolor(panel_face)
+            self.axis.axhline(0.0, color="#20313a", linewidth=0.7 * fs, zorder=0)
             self.axis.plot(
                 self.relative_time,
                 self.h_plus,
                 color="#245464",
-                linewidth=0.85,
+                linewidth=0.85 * fs,
                 alpha=0.72,
             )
             (self.active_line,) = self.axis.plot(
-                [], [], color="#7cecff", linewidth=1.35
+                [], [], color="#7cecff", linewidth=1.35 * fs
             )
             self.marker = self.axis.axvline(
-                0.0, color="#ffd66d", linewidth=1.1, alpha=0.95
+                0.0, color="#ffd66d", linewidth=1.1 * fs, alpha=0.95
             )
             self.time_label = self.axis.text(
                 0.995,
@@ -2054,7 +2329,7 @@ class _WaveformPanelRenderer:
                 color="#dfeef2",
                 ha="right",
                 va="top",
-                fontsize=8.5,
+                fontsize=8.5 * fs,
             )
             waveform_label = (
                 r"$h_+\;\mathrm{(normalised)}$"
@@ -2069,7 +2344,7 @@ class _WaveformPanelRenderer:
                 color="#dfeef2",
                 ha="left",
                 va="top",
-                fontsize=8.5,
+                fontsize=8.5 * fs,
             )
             self.axis.set_xlim(0.0, end_time - start_time)
             self.axis.set_ylim(-1.12, 1.12)
@@ -2082,20 +2357,20 @@ class _WaveformPanelRenderer:
             self.axis.set_xlabel(
                 xlabel,
                 color="#91a8af",
-                fontsize=8,
-                labelpad=2,
+                fontsize=8 * fs,
+                labelpad=2 * fs,
             )
             self.axis.tick_params(
                 axis="x",
                 colors="#718991",
-                labelsize=7.5,
-                length=2.5,
-                width=0.6,
+                labelsize=7.5 * fs,
+                length=2.5 * fs,
+                width=0.6 * fs,
             )
             for side in ("left", "right", "top"):
                 self.axis.spines[side].set_visible(False)
             self.axis.spines["bottom"].set_color("#38515a")
-            self.axis.spines["bottom"].set_linewidth(0.7)
+            self.axis.spines["bottom"].set_linewidth(0.7 * fs)
 
     def _style_context(self, mpl):
         if self.style_file is not None:
@@ -2117,7 +2392,39 @@ class _WaveformPanelRenderer:
             self.time_label.set_text(f"t = {relative:,.1f} s")
         with self._style_context(mpl):
             self.canvas.draw()
-        return np.asarray(self.canvas.buffer_rgba())[..., :3].copy()
+        buffer = np.asarray(self.canvas.buffer_rgba())
+        # Keep the alpha channel when transparent so the panel can be
+        # alpha-composited over the scene; otherwise return opaque RGB.
+        if self.transparent:
+            return buffer.copy()
+        return buffer[..., :3].copy()
+
+
+def _combine_frame_and_panel(
+    image: np.ndarray, panel: np.ndarray
+) -> np.ndarray:
+    """Place the waveform panel along the bottom of a rendered frame.
+
+    An opaque (RGB) panel is stacked beneath a shorter scene render. A
+    transparent (RGBA) panel is alpha-composited over the bottom rows of a
+    full-height scene render instead, so the starfield and volume stay visible
+    behind the trace.
+    """
+
+    if panel.shape[1] != image.shape[1]:
+        raise RuntimeError("waveform panel width does not match the VTK render")
+    if panel.shape[2] < 4:
+        return np.vstack((image, panel))
+    rows = panel.shape[0]
+    if rows > image.shape[0]:
+        raise RuntimeError("waveform panel is taller than the rendered frame")
+    alpha = panel[..., 3:4].astype(np.float32) / 255.0
+    foreground = panel[..., :3].astype(np.float32)
+    background = image[-rows:, :, :3].astype(np.float32)
+    blended = foreground * alpha + background * (1.0 - alpha)
+    out = image.copy()
+    out[-rows:, :, :3] = np.clip(blended, 0.0, 255.0).astype(image.dtype)
+    return out
 
 
 def render_mode_frame(
@@ -2142,19 +2449,25 @@ def render_mode_frame(
     presentation: VolumePresentation = "balanced",
     color_exposure: Optional[float] = None,
     background_color: Optional[str] = None,
-    opacity: float = 0.10,
+    opacity: Optional[float] = None,
     shell_count: int = 7,
     shell_min: float = 0.10,
     shell_max: float = 0.92,
     shell_width: float = 0.075,
     shell_opacity_floor: float = 0.16,
     shell_glow: float = 0.12,
+    flux_gamma: float = 0.6,
+    flux_threshold: float = 0.35,
     smooth_sigma: float = 0.65,
     opacity_unit_distance: Optional[float] = None,
     window_size: tuple[int, int] = (1280, 720),
     image_scale: int = 1,
     camera_view: VolumeCameraView = "oblique",
     camera_zoom: Optional[float] = None,
+    camera_azimuth: float = 0.0,
+    camera_elevation: float = 0.0,
+    camera_latitude: Optional[float] = None,
+    camera_longitude: Optional[float] = None,
     starfield: Optional[bool] = None,
     star_count: Optional[int] = None,
     source_marker: bool = False,
@@ -2174,6 +2487,7 @@ def render_mode_frame(
     waveform_phi: float = 0.0,
     waveform_font_style: WaveformFontStyle = "latex",
     waveform_style_file: Optional[PathLike] = None,
+    waveform_transparent: bool = True,
 ) -> Path:
     """Render one full-sky mode frame with the animation presentation layers.
 
@@ -2197,6 +2511,7 @@ def render_mode_frame(
         raise ValueError("screenshot filename must end in .png, .jpg, or .jpeg")
     if image_scale < 1:
         raise ValueError("image_scale must be at least 1")
+    opacity = _resolve_opacity(opacity, opacity_profile)
     if not 0.0 < opacity <= 1.0:
         raise ValueError("opacity must be in the interval (0, 1]")
     if smooth_sigma < 0.0:
@@ -2248,7 +2563,12 @@ def render_mode_frame(
         if show_waveform
         else 0
     )
-    main_window_size = (total_width, total_height - panel_height)
+    transparent_panel = show_waveform and waveform_transparent
+    # A transparent panel is composited over a full-height scene render so the
+    # background shows through it; an opaque panel is stacked below a shorter
+    # scene render, so that render loses the panel's height.
+    main_height = total_height if transparent_panel else total_height - panel_height
+    main_window_size = (total_width, main_height)
     if min(main_window_size) <= 0:
         raise ValueError("waveform_fraction leaves no space for the volume")
 
@@ -2309,11 +2629,17 @@ def render_mode_frame(
         shell_width=shell_width,
         shell_opacity_floor=shell_opacity_floor,
         shell_glow=shell_glow,
+        flux_gamma=flux_gamma,
+        flux_threshold=flux_threshold,
         smooth_sigma=smooth_sigma,
         opacity_unit_distance=opacity_unit_distance,
         window_size=main_window_size,
         camera_view=camera_view,
         camera_zoom=camera_zoom,
+        camera_azimuth=camera_azimuth,
+        camera_elevation=camera_elevation,
+        camera_latitude=camera_latitude,
+        camera_longitude=camera_longitude,
         starfield=starfield,
         star_count=star_count,
         source_marker=source_marker and not show_bodies,
@@ -2348,6 +2674,7 @@ def render_mode_frame(
             font_style=waveform_font_style,
             style_file=waveform_style_file,
             background_color=resolved_presentation.background_color,
+            transparent=transparent_panel,
         )
         if show_waveform
         else None
@@ -2362,9 +2689,7 @@ def render_mode_frame(
         )[..., :3]
         if waveform_panel is not None:
             panel = waveform_panel.render(frame)
-            if panel.shape[1] != image.shape[1]:
-                raise RuntimeError("waveform panel width does not match VTK render")
-            image = np.vstack((image, panel))
+            image = _combine_frame_and_panel(image, panel)
         imageio.imwrite(output, image)
     finally:
         plotter.close()
@@ -2394,20 +2719,30 @@ def render_mode_animation(
     presentation: VolumePresentation = "balanced",
     color_exposure: Optional[float] = None,
     background_color: Optional[str] = None,
-    opacity: float = 0.10,
+    opacity: Optional[float] = None,
     shell_count: int = 7,
     shell_min: float = 0.10,
     shell_max: float = 0.92,
     shell_width: float = 0.075,
     shell_opacity_floor: float = 0.16,
     shell_glow: float = 0.12,
+    flux_gamma: float = 0.6,
+    flux_threshold: float = 0.35,
     smooth_sigma: float = 0.65,
     opacity_unit_distance: Optional[float] = None,
     window_size: tuple[int, int] = (1280, 720),
     image_scale: int = 1,
     camera_view: VolumeCameraView = "oblique",
     camera_zoom: Optional[float] = None,
+    camera_azimuth: float = 0.0,
+    camera_elevation: float = 0.0,
+    camera_latitude: Optional[float] = None,
+    camera_longitude: Optional[float] = None,
     camera_orbit_degrees: float = 0.0,
+    camera_latitude_end: Optional[float] = None,
+    camera_longitude_end: Optional[float] = None,
+    camera_zoom_end: Optional[float] = None,
+    camera_loop: bool = False,
     starfield: Optional[bool] = None,
     star_count: Optional[int] = None,
     source_marker: bool = False,
@@ -2427,6 +2762,7 @@ def render_mode_animation(
     waveform_phi: float = 0.0,
     waveform_font_style: WaveformFontStyle = "latex",
     waveform_style_file: Optional[PathLike] = None,
+    waveform_transparent: bool = True,
     global_start_time: Optional[float] = None,
     global_end_time: Optional[float] = None,
     normalization_time: Optional[float] = None,
@@ -2451,8 +2787,31 @@ def render_mode_animation(
     omitted, a robust common scale is measured at ``normalization_samples``
     times spanning that global interval.  This avoids clipping stronger late
     inspiral frames against the first frame's scale.
+    The ``flux`` opacity profile is the exception: because it gates opacity on a
+    per-frame threshold and :math:`|\dot h|^2` spikes at periapsis, a single
+    common scale would blank the quieter frames, so each flux frame is
+    self-normalized instead (``normalization_samples`` is then unused).
     For energy flux, ``flux_mode_combination="incoherent"`` removes modal
     cross terms and therefore suppresses rapidly rotating angular lobes.
+
+    The camera can be flown during the movie. Set the starting view with
+    ``camera_view`` or an absolute ``camera_latitude``/``camera_longitude``,
+    then give ``camera_latitude_end``/``camera_longitude_end`` to have the
+    camera travel to that absolute angle by the final frame; the motion is keyed
+    to the global interval so cluster segments join seamlessly. This is the
+    general form of ``camera_orbit_degrees`` (a pure longitude sweep), which
+    still works when no ``*_end`` angle is given. ``camera_loop=True`` instead
+    flies a full 360 degrees of longitude back to the start while easing the
+    latitude up to ``camera_latitude_end`` (the peak) and back, so the shot
+    circles the binary and returns to the opening view. ``camera_zoom_end``
+    interpolates the zoom factor from the starting ``camera_zoom`` to that value
+    across the movie (larger = more magnified), so the camera pushes in or pulls
+    out over the inspiral; it combines with any of the angle motions above.
+
+    ``show_waveform=True`` draws the strain panel along the bottom. By default
+    (``waveform_transparent=True``) it is composited over a full-height scene
+    render so the starfield and volume stay visible behind the trace; set
+    ``waveform_transparent=False`` for the older opaque strip below the scene.
     """
 
     output = Path(filename)
@@ -2475,6 +2834,7 @@ def render_mode_animation(
         raise ValueError("fps must be positive")
     if image_scale < 1:
         raise ValueError("image_scale must be at least 1")
+    opacity = _resolve_opacity(opacity, opacity_profile)
     if not 0.0 < opacity <= 1.0:
         raise ValueError("opacity must be in the interval (0, 1]")
     if smooth_sigma < 0.0:
@@ -2547,7 +2907,12 @@ def render_mode_animation(
         if show_waveform
         else 0
     )
-    main_window_size = (total_width, total_height - panel_height)
+    transparent_panel = show_waveform and waveform_transparent
+    # A transparent panel is composited over a full-height scene render so the
+    # background shows through it; an opaque panel is stacked below a shorter
+    # scene render, so that render loses the panel's height.
+    main_height = total_height if transparent_panel else total_height - panel_height
+    main_window_size = (total_width, main_height)
     if min(main_window_size) <= 0:
         raise ValueError("waveform_fraction leaves no space for the volume")
 
@@ -2592,30 +2957,41 @@ def render_mode_animation(
         model=waveform.model,
         mode_count=waveform.modes.shape[1],
     )
-    render_scales = []
-    for normalization_frame in normalization_frames:
-        if np.isclose(
-            normalization_frame,
-            float(frame_times[0]),
-            rtol=0.0,
-            atol=np.finfo(float).eps * max(1.0, abs(float(frame_times[0]))),
-        ):
-            normalization_field = first_field
-        else:
-            normalization_field = _component_from_mode_sampling(
-                sampling,
-                frame_time=float(normalization_frame),
-                max_delay=max_delay,
-                component=component,
-                flux_mode_combination=flux_mode_combination,
+    # The flux profile gates opacity on a per-frame threshold, and |dh/dt|^2
+    # spikes sharply at periapsis. A single common scale (the max over the
+    # sample frames) would be set by one burst and push every quieter frame
+    # below the threshold, blanking most of the movie. So the flux profile
+    # self-normalizes each frame instead, keeping the outgoing shells visible
+    # throughout; ``render_scale = None`` selects that per-frame path below.
+    if opacity_profile == "flux":
+        render_scale = None
+    else:
+        render_scales = []
+        for normalization_frame in normalization_frames:
+            if np.isclose(
+                normalization_frame,
+                float(frame_times[0]),
+                rtol=0.0,
+                atol=np.finfo(float).eps * max(1.0, abs(float(frame_times[0]))),
+            ):
+                normalization_field = first_field
+            else:
+                normalization_field = _component_from_mode_sampling(
+                    sampling,
+                    frame_time=float(normalization_frame),
+                    max_delay=max_delay,
+                    component=component,
+                    flux_mode_combination=flux_mode_combination,
+                )
+            normalization_field = _smooth_render_field(
+                normalization_field, smooth_sigma
             )
-        normalization_field = _smooth_render_field(
-            normalization_field, smooth_sigma
-        )
-        render_scales.append(_render_field_scale(normalization_field, component))
-        if normalization_field is not first_field:
-            del normalization_field
-    render_scale = max(render_scales)
+            render_scales.append(
+                _render_field_scale(normalization_field, component)
+            )
+            if normalization_field is not first_field:
+                del normalization_field
+        render_scale = max(render_scales)
     plotter = render_volume(
         first_volume,
         component=component,
@@ -2632,11 +3008,17 @@ def render_mode_animation(
         shell_width=shell_width,
         shell_opacity_floor=shell_opacity_floor,
         shell_glow=shell_glow,
+        flux_gamma=flux_gamma,
+        flux_threshold=flux_threshold,
         smooth_sigma=smooth_sigma,
         opacity_unit_distance=opacity_unit_distance,
         window_size=main_window_size,
         camera_view=camera_view,
         camera_zoom=camera_zoom,
+        camera_azimuth=camera_azimuth,
+        camera_elevation=camera_elevation,
+        camera_latitude=camera_latitude,
+        camera_longitude=camera_longitude,
         starfield=starfield,
         star_count=star_count,
         source_marker=source_marker and not show_bodies,
@@ -2685,6 +3067,7 @@ def render_mode_animation(
             font_style=waveform_font_style,
             style_file=waveform_style_file,
             background_color=resolved_presentation.background_color,
+            transparent=transparent_panel,
         )
         if show_waveform
         else None
@@ -2704,6 +3087,47 @@ def render_mode_animation(
         writer = imageio.get_writer(output, mode="I", fps=fps, loop=0)
 
     base_camera_position = np.asarray(plotter.camera.position, dtype=float)
+    # Resolve the camera flight path. The starting angle comes from whatever the
+    # first frame ended up at (a preset, or an absolute camera_latitude/
+    # longitude), read straight off the camera; the end angle is the *_end
+    # target. When either differs from the start the camera is flown between the
+    # two absolute angles across the global interval, which is the general
+    # replacement for ``camera_orbit_degrees``.
+    camera_distance = float(np.linalg.norm(base_camera_position))
+    camera_latitude_start = float(
+        np.degrees(np.arcsin(base_camera_position[2] / camera_distance))
+    )
+    camera_longitude_start = float(
+        np.degrees(
+            np.arctan2(base_camera_position[1], base_camera_position[0])
+        )
+    )
+    latitude_target = (
+        camera_latitude_start
+        if camera_latitude_end is None
+        else float(camera_latitude_end)
+    )
+    longitude_target = (
+        camera_longitude_start
+        if camera_longitude_end is None
+        else float(camera_longitude_end)
+    )
+    if abs(latitude_target) > 90.0:
+        raise ValueError("camera_latitude_end must be in the interval [-90, 90]")
+    fly_camera = (
+        latitude_target != camera_latitude_start
+        or longitude_target != camera_longitude_start
+    )
+    # Optional zoom flight: interpolate the zoom factor from the starting value
+    # (whatever ``camera_zoom``/preset resolved to) up to ``camera_zoom_end``
+    # across the global interval, and set the view angle directly each frame so
+    # it does not compound. Larger zoom = closer/more magnified.
+    zoom_start = float(resolved_presentation.camera_zoom)
+    if camera_zoom_end is not None and float(camera_zoom_end) <= 0.0:
+        plotter.close()
+        raise ValueError("camera_zoom_end must be positive")
+    zoom_target = zoom_start if camera_zoom_end is None else float(camera_zoom_end)
+    animate_zoom = zoom_target != zoom_start
     render_array = grid.point_data[render_name]
     try:
         plotter.show(auto_close=False)
@@ -2724,6 +3148,7 @@ def render_mode_animation(
                 component,
                 scale=render_scale,
                 opacity_profile=opacity_profile,
+                flux_gamma=flux_gamma,
             )
             render_array[:] = display_field.ravel(order="F")
             render_array.VTKObject.Modified()
@@ -2746,7 +3171,44 @@ def render_mode_animation(
                     _set_polyline_points(
                         trajectory_polyline, tail, color=trajectory_color
                     )
-            if camera_orbit_degrees != 0.0:
+            if camera_loop:
+                global_fraction = (float(frame_time) - global_start) / (
+                    global_end - global_start
+                )
+                # Longitude sweeps a full turn (back to the start); latitude
+                # eases up to the peak (``camera_latitude_end``) at the halfway
+                # point and back down, with zero speed at both ends so the shot
+                # opens and closes gently.
+                ease = (1.0 - np.cos(2.0 * np.pi * global_fraction)) / 2.0
+                latitude = camera_latitude_start + ease * (
+                    latitude_target - camera_latitude_start
+                )
+                longitude = camera_longitude_start + 360.0 * global_fraction
+                position, view_up = _camera_angle_vectors(
+                    radius, latitude, longitude, distance=camera_distance
+                )
+                plotter.camera.position = position
+                plotter.camera.focal_point = (0.0, 0.0, 0.0)
+                plotter.camera.up = view_up
+                plotter.reset_camera_clipping_range()
+            elif fly_camera:
+                global_fraction = (float(frame_time) - global_start) / (
+                    global_end - global_start
+                )
+                latitude = camera_latitude_start + global_fraction * (
+                    latitude_target - camera_latitude_start
+                )
+                longitude = camera_longitude_start + global_fraction * (
+                    longitude_target - camera_longitude_start
+                )
+                position, view_up = _camera_angle_vectors(
+                    radius, latitude, longitude, distance=camera_distance
+                )
+                plotter.camera.position = position
+                plotter.camera.focal_point = (0.0, 0.0, 0.0)
+                plotter.camera.up = view_up
+                plotter.reset_camera_clipping_range()
+            elif camera_orbit_degrees != 0.0:
                 global_fraction = (float(frame_time) - global_start) / (
                     global_end - global_start
                 )
@@ -2759,6 +3221,12 @@ def render_mode_animation(
                     sine * x + cosine * y,
                     z,
                 )
+            if animate_zoom:
+                global_fraction = (float(frame_time) - global_start) / (
+                    global_end - global_start
+                )
+                zoom = zoom_start + global_fraction * (zoom_target - zoom_start)
+                plotter.camera.view_angle = _CAMERA_VIEW_ANGLE / zoom
             plotter.render()
             image = plotter.screenshot(
                 return_img=True,
@@ -2767,11 +3235,7 @@ def render_mode_animation(
             image = np.asarray(image)[..., :3]
             if waveform_panel is not None:
                 panel = waveform_panel.render(float(frame_time))
-                if panel.shape[1] != image.shape[1]:
-                    raise RuntimeError(
-                        "waveform panel width does not match the VTK render"
-                    )
-                image = np.vstack((image, panel))
+                image = _combine_frame_and_panel(image, panel)
             writer.append_data(image)
     finally:
         writer.close()
@@ -2866,6 +3330,7 @@ def _normalize_render_field(
     *,
     scale: Optional[float] = None,
     opacity_profile: VolumeOpacityProfile = "soft",
+    flux_gamma: float = 0.6,
 ) -> tuple[np.ndarray, tuple[float, float]]:
     if scale is None:
         scale = _render_field_scale(field, component)
@@ -2878,19 +3343,20 @@ def _normalize_render_field(
     if opacity_profile == "shells":
         return np.clip(field / scale, 0.0, 1.0), (0.0, 1.0)
 
-    # The flux profile displays a logarithmic energy flux. Four decades keep
-    # faint, spatially broad emission visible instead of restricting the render
-    # to the thinnest peak-flux shells.
+    # The flux profile renders the coherent energy flux |dh/dt|^2, which spans
+    # a huge spatial range: it plunges toward zero twice per wave cycle and so
+    # sits near its floor almost everywhere, spiking only on the outgoing
+    # crests. A ``flux_gamma`` below one lifts those low values into the bright
+    # half of the colour map, so the crests read as luminous shells rather than
+    # a dim ball. The opacity transfer function then gates on this same value,
+    # keeping the troughs transparent.
     if opacity_profile == "flux":
+        if flux_gamma <= 0.0:
+            raise ValueError("flux_gamma must be positive")
         scaled = np.clip(field / scale, 0.0, 1.0)
-        decades = 4.0
-        floor = 10.0 ** (-decades)
-        compressed = np.zeros_like(scaled)
-        positive = scaled > floor
-        compressed[positive] = (
-            np.log10(scaled[positive]) + decades
-        ) / decades
-        return np.clip(compressed, 0.0, 1.0), (0.0, 1.0)
+        if flux_gamma != 1.0:
+            scaled = scaled ** flux_gamma
+        return np.clip(scaled, 0.0, 1.0), (0.0, 1.0)
 
     if component in ("amplitude", "energy_flux"):
         return np.clip(field / scale, 0.0, 1.0), (
@@ -2925,8 +3391,9 @@ def _wavefront_opacity_transfer(
     shell_width: float = 0.075,
     shell_opacity_floor: float = 0.16,
     shell_glow: float = 0.12,
+    flux_threshold: float = 0.35,
 ) -> np.ndarray:
-    """Build generic, layered signed-strain, or logarithmic flux opacity maps."""
+    """Build generic, layered signed-strain, or threshold-gated flux opacity maps."""
 
     if profile == "shells":
         if shell_count < 2:
@@ -2980,14 +3447,17 @@ def _wavefront_opacity_transfer(
         )
 
     if profile == "flux":
+        if not 0.0 <= flux_threshold < 1.0:
+            raise ValueError("flux_threshold must be in the interval [0, 1)")
         values = np.linspace(0.0, 1.0, n_colors)
-        # The input has already been compressed logarithmically. A broad,
-        # saturating opacity ramp lets colour carry the power variation. Strong
-        # angular lobes therefore remain bright without also becoming much more
-        # solid than the surrounding radiation.
-        visibility = _smoothstep((values - 0.015) / 0.20)
-        plateau = 0.78 + 0.22 * _smoothstep((values - 0.20) / 0.55)
-        alpha = maximum_opacity * visibility * plateau
+        # Gate opacity on the (already ``flux_gamma``-lifted) value: the dim
+        # troughs between wavefronts stay transparent while the bright crests
+        # become solid. This turns the volume-filling ball into a set of nested
+        # luminous flux shells with the equatorial null showing through. A soft
+        # edge keeps the shells from aliasing into hard contour lines.
+        softness = max(1.0 - flux_threshold, 1e-3) * 0.4
+        visibility = _smoothstep((values - flux_threshold) / softness)
+        alpha = maximum_opacity * visibility ** 1.1
         return np.asarray(
             np.clip(255.0 * alpha, 0.0, 255.0), dtype=np.uint8
         )
@@ -3028,7 +3498,7 @@ def _volume_colormap(
 
     if color_exposure <= 0.0:
         raise ValueError("color_exposure must be positive")
-    if color_scheme in ("cinematic", "rainbow"):
+    if color_scheme in ("cinematic", "rainbow", "ice"):
         if color_scheme == "rainbow":
             # A perceptually smooth blue-cyan-green-gold-red sequence, a gentler
             # alternative to a hard rainbow for signed-strain shells.
@@ -3041,6 +3511,19 @@ def _volume_colormap(
                 "#f5df4d",
                 "#f79a42",
                 "#e54155",
+            ]
+        elif color_scheme == "ice":
+            # Deep navy through blue and cyan to a white-hot core, matching the
+            # numerical-relativity "blue shells with a bright centre" look: faint
+            # outer shells stay navy while the strongest crests read as white.
+            colors = [
+                "#040a24",
+                "#0a2a66",
+                "#1657b8",
+                "#2f92e6",
+                "#71c4f4",
+                "#bfe7fc",
+                "#f4fbff",
             ]
         elif component in ("amplitude", "energy_flux"):
             colors = [

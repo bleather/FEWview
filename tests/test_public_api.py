@@ -1,13 +1,30 @@
 """Smoke tests for the public Fewview surface and the renamed palettes."""
 
+import inspect
 import unittest
 
 import fewview
+from fewview._core import _resolve_few_model
 
 
 class PublicApiTest(unittest.TestCase):
     def test_version_is_exposed(self):
         self.assertRegex(fewview.__version__, r"^\d+\.\d+")
+
+    def test_generate_accepts_model_parameter(self):
+        sig = inspect.signature(fewview.generate_relativistic_mode_waveform)
+        self.assertIn("model", sig.parameters)
+        self.assertEqual(
+            sig.parameters["model"].default, "FastKerrEccentricEquatorialFlux"
+        )
+
+    def test_resolve_few_model_passes_through_instances(self):
+        sentinel = object()  # an already-instantiated model is returned as-is
+        self.assertIs(_resolve_few_model(sentinel, 10, 55, "cpu"), sentinel)
+
+    def test_resolve_few_model_rejects_unknown_name(self):
+        with self.assertRaises(ValueError):
+            _resolve_few_model("NotARealFewModel", 10, 55, "cpu")
 
     def test_all_names_are_importable(self):
         for name in fewview.__all__:

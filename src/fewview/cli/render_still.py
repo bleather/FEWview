@@ -154,7 +154,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.05,
         help="fractional outer-radius taper used to smooth the voxel boundary",
     )
-    display.add_argument("--opacity", type=float, default=0.12)
+    display.add_argument(
+        "--opacity",
+        type=float,
+        default=None,
+        help="max opacity; defaults to 0.55 for flux, 0.30 for shells, and 0.11 otherwise",
+    )
     display.add_argument("--shell-count", type=int, default=7)
     display.add_argument("--shell-min", type=float, default=0.10)
     display.add_argument("--shell-max", type=float, default=0.92)
@@ -250,6 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         primary_mass=waveform.primary_mass,
         secondary_mass=waveform.secondary_mass,
         spin=waveform.spin,
+        model=waveform.model,
         h_plus_reference=h_plus,
         h_cross_reference=h_cross,
     )

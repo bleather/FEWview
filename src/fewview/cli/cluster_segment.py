@@ -58,6 +58,7 @@ def load_mode_waveform(filename: Path) -> tuple[RelativisticModeWaveform, np.nda
             primary_mass=_optional_float(data, "primary_mass"),
             secondary_mass=_optional_float(data, "secondary_mass"),
             spin=_optional_float(data, "spin"),
+            model=str(data["model"]) if "model" in data else "FastKerrEccentricEquatorialFlux",
         )
         if "h_plus_reference" in data and "h_cross_reference" in data:
             reference = np.asarray(data["h_plus_reference"]) - 1j * np.asarray(
@@ -145,6 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
             "cool",
             "blues",
             "cinematic",
+            "ice",
         ),
         default="rainbow",
     )
@@ -174,6 +176,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--camera-zoom", type=float, default=0.95)
     parser.add_argument("--camera-orbit", type=float, default=0.0)
+    parser.add_argument("--camera-azimuth", type=float, default=0.0)
+    parser.add_argument("--camera-elevation", type=float, default=0.0)
+    parser.add_argument("--camera-latitude", type=float, default=None)
+    parser.add_argument("--camera-longitude", type=float, default=None)
+    parser.add_argument("--camera-latitude-end", type=float, default=None)
+    parser.add_argument("--camera-longitude-end", type=float, default=None)
+    parser.add_argument("--camera-zoom-end", type=float, default=None)
+    parser.add_argument(
+        "--camera-loop", action=argparse.BooleanOptionalAction, default=False
+    )
     parser.add_argument(
         "--starfield", action=argparse.BooleanOptionalAction, default=None
     )
@@ -186,6 +198,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--waveform-panel", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument(
+        "--waveform-transparent",
+        action=argparse.BooleanOptionalAction,
+        default=True,
     )
     parser.add_argument("--trajectory-tail-cycles", type=float, default=2.0)
     parser.add_argument("--trajectory-line-width", type=float, default=1.6)
@@ -305,11 +322,20 @@ def main(argv: list[str] | None = None) -> int:
         camera_view=args.camera_view,
         camera_zoom=args.camera_zoom,
         camera_orbit_degrees=args.camera_orbit,
+        camera_azimuth=args.camera_azimuth,
+        camera_elevation=args.camera_elevation,
+        camera_latitude=args.camera_latitude,
+        camera_longitude=args.camera_longitude,
+        camera_latitude_end=args.camera_latitude_end,
+        camera_longitude_end=args.camera_longitude_end,
+        camera_zoom_end=args.camera_zoom_end,
+        camera_loop=args.camera_loop,
         starfield=args.starfield,
         star_count=args.star_count,
         show_bodies=args.bodies,
         show_trajectory=args.trajectory,
         show_waveform=args.waveform_panel,
+        waveform_transparent=args.waveform_transparent,
         trajectory_tail_cycles=args.trajectory_tail_cycles,
         trajectory_line_width=args.trajectory_line_width,
         trajectory_color=args.trajectory_color,

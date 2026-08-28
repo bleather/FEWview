@@ -40,6 +40,12 @@ A few stills produced with Fewview, across colour palettes and camera views.
     <td align="center"><code>plasma</code>, face-on</td>
     <td align="center"><code>magma</code>, face-on</td>
   </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/images/gallery-flux-plasma.png" alt="energy flux, oblique view" width="50%"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">energy flux (<code>energy_flux</code> + <code>flux</code> profile), oblique — the bright polar flux lobes with the equatorial null showing through</td>
+  </tr>
 </table>
 
 ## Installation
@@ -87,11 +93,38 @@ render_mode_frame(
     component="plus",
     opacity_profile="shells",
     color_scheme="rainbow",
+    presentation="shells_dramatic",
 )
 ```
 
 For a movie, use `render_mode_animation` with the same arguments plus a
 `start_time`/`end_time` range and `frames`/`fps`.
+
+## Waveform models
+
+By default the waveform comes from FEW's `FastKerrEccentricEquatorialFlux`. The
+`model` argument selects any mode-resolved FEW model, by class name or as an
+already-instantiated model object:
+
+```python
+# a different flux model
+wf = generate_relativistic_mode_waveform(
+    M=1e6, mu=10.0, a=0.0, p0=12.0, e0=0.4, xI0=1.0,
+    dt=10.0, T=0.01, model="FastSchwarzschildEccentricFlux",
+)
+
+# the post-adiabatic circular model (needs a FEW build that provides it)
+wf = generate_relativistic_mode_waveform(
+    M=1e6, mu=10.0, a=0.5, p0=10.0, e0=0.0, xI0=1.0,
+    dt=10.0, T=0.02, model="Waveform1PAT1R",
+)
+```
+
+The flux family and the post-adiabatic `Waveform1PAT1R` (a circular model that
+evolves the primary's mass and spin) are both supported; Fewview reconstructs
+the same modes those models produce (validated at >99% overlap against
+`Waveform1PAT1R`'s own output). Install Fewview into the same environment as the
+FEW build that provides the model you want.
 
 ## Appearance
 
@@ -108,13 +141,28 @@ Three knobs control the look.
 
 **Opacity profile** — how values map to transparency: `soft` (broad fronts,
 the default), `bands` (symmetric levels), `shells` (nested translucent
-signed-strain sheets; needs `plus`/`cross`), `flux` (log-compressed energy
-flux; needs `energy_flux`).
+signed-strain sheets; needs `plus`/`cross`), `flux` (threshold-gated
+energy-flux shells that keep the dim troughs transparent; needs `energy_flux`,
+and reads best with `presentation="shells_dramatic"`). The `flux` look is tuned
+with `flux_threshold` (how bright a crest must be to become solid) and
+`flux_gamma` (how much the dim inter-crest flux is lifted).
 
 **Colour scheme** — any Matplotlib colormap (`magma`, `viridis`, `plasma`,
 `inferno`, `cividis`, `cool`, `blues`) plus three tuned palettes: `rainbow`,
 `aurora`, `cinematic`. `fewview.colormaps.available_color_schemes()` lists
 them all.
+
+**Camera** — `camera_view` picks the `oblique` or `face_on` preset and
+`camera_zoom` frames the sphere. For a specific angle, set an absolute
+`camera_latitude` (degrees above the equatorial plane) and `camera_longitude`
+(azimuth from `+x`); `camera_azimuth`/`camera_elevation` instead nudge the
+preset by a relative offset. In `render_mode_animation` the camera can fly:
+give `camera_latitude_end`/`camera_longitude_end` and it travels there by the
+final frame, or set `camera_loop=True` to circle a full 360° and rise to a peak
+latitude then settle back on the opening view (with `camera_orbit_degrees` as
+the older pure-azimuth sweep). The `show_waveform` strain panel is composited
+over the scene by default (`waveform_transparent=True`) so the background shows
+through it; pass `waveform_transparent=False` for the older opaque strip.
 
 ## API layout
 

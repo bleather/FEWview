@@ -71,6 +71,7 @@ fv.render_mode_frame(
     opacity_profile="shells",
     color_scheme="rainbow",
     presentation="shells_dramatic",
+    opacity=0.30,
     camera_view="oblique",
     camera_zoom=0.95,
     shell_count=7, shell_min=0.10, shell_max=0.92,
@@ -99,19 +100,43 @@ fv.render_mode_frame(
     waveform_start_time=end - 8 * period, waveform_end_time=end,
     resolution=200,
     component="plus", opacity_profile="shells", color_scheme="cool",
-    presentation="shells_dramatic", camera_view="face_on", camera_zoom=1.1,
+    presentation="shells_dramatic", opacity=0.30, camera_view="face_on", camera_zoom=1.1,
     shell_count=7, shell_min=0.10, shell_max=0.92, smooth_sigma=1.2,
     inner_window_fraction=0.10, outer_window_fraction=0.10,
     trajectory_color="#00b7ff", window_size=(760, 760),
 )
 ```
 
-For energy flux instead of strain, set `component="energy_flux"` with
-`opacity_profile="flux"`, which logarithmically compresses $|\dot h|^2$ so
-faint, broad emission stays visible. It reads best at higher eccentricity,
-where the flux develops strong spiral structure.
+## 5. A different field: energy flux
 
-## 5. Diagnostic slice
+The looks above render the strain (`component="plus"`), but Fewview can also
+show the outgoing energy flux $|\dot h|^2$. Pair `component="energy_flux"` with
+`opacity_profile="flux"`: the profile keeps the dim troughs between wavefronts
+transparent and lets only the bright crests turn solid, so the flux reads as a
+set of nested luminous shells with the equatorial null showing through instead
+of a filled ball. It looks best with `presentation="shells_dramatic"` and an
+oblique camera, and the structure is strongest at higher eccentricity.
+
+```python
+fv.render_mode_frame(
+    waveform, screenshot="tutorial-flux.png",
+    max_delay=max_delay, frame_time=end,
+    waveform_start_time=end - 8 * period, waveform_end_time=end,
+    resolution=200,
+    component="energy_flux", opacity_profile="flux", color_scheme="plasma",
+    presentation="shells_dramatic", color_exposure=2.2,
+    camera_view="oblique", camera_zoom=0.62, smooth_sigma=0.7,
+    inner_window_fraction=0.10, outer_window_fraction=0.10,
+    trajectory_color="#00e0ff", window_size=(900, 900),
+)
+```
+
+Two knobs tune the flux look: `flux_threshold` sets how bright a crest must be
+before it becomes solid (raise it to isolate the brightest lobes), and
+`flux_gamma` lifts the dim inter-crest flux into the bright half of the colour
+map. The defaults (`0.35` and `0.6`) are tuned for these EMRI fluxes.
+
+## 6. Diagnostic slice
 
 Before a full render, a coordinate-plane slice is a fast way to inspect the
 field:
@@ -124,7 +149,7 @@ volume = fv.build_mode_retarded_time_volume(
 fig, _ = fv.plot_volume_slice(volume, component="plus", plane="xz")
 ```
 
-## 6. A short animation
+## 7. A short animation
 
 `render_mode_animation` sweeps a range of frame times to an MP4, reusing the
 angular basis across frames and holding the colour scale fixed so the movie does
@@ -139,7 +164,7 @@ fv.render_mode_animation(
     max_delay=max_delay, start_time=anim_start, end_time=anim_end,
     frames=24, fps=12, resolution=110,
     component="plus", opacity_profile="shells", color_scheme="rainbow",
-    presentation="shells_dramatic", camera_zoom=0.95,
+    presentation="shells_dramatic", opacity=0.30, camera_zoom=0.95,
     shell_count=7, smooth_sigma=1.2,
     inner_window_fraction=0.10, outer_window_fraction=0.10,
     trajectory_color="#00b7ff", show_waveform=True,
@@ -151,6 +176,26 @@ fv.render_mode_animation(
 is traversed; the frame count sets how smoothly. Aim for at least ~20 frames per
 wave cycle, or the wave pattern strobes.
 
+The same call renders the energy flux in motion. The `flux` profile
+self-normalizes each frame (a single fixed colour scale would be dominated by
+the periapsis burst and blank the quieter frames), so the outgoing flux shells
+stay visible as they propagate outward:
+
+```python
+fv.render_mode_animation(
+    waveform, "tutorial-flux.mp4",
+    max_delay=max_delay, start_time=anim_start, end_time=anim_end,
+    frames=30, fps=15, resolution=120,
+    component="energy_flux", opacity_profile="flux", color_scheme="plasma",
+    presentation="shells_dramatic", color_exposure=2.2,
+    camera_view="oblique", camera_zoom=0.62, smooth_sigma=0.7,
+    inner_window_fraction=0.10, outer_window_fraction=0.10,
+    trajectory_color="#00e0ff",
+    show_bodies=True, show_trajectory=True, show_waveform=True,
+    window_size=(700, 640),
+)
+```
+
 ## Choosing settings
 
 | knob | options | notes |
@@ -160,6 +205,11 @@ wave cycle, or the wave pattern strobes.
 | `color_scheme` | Matplotlib names + `rainbow`, `aurora`, `cinematic` | `fv.available_color_schemes()` lists them |
 | `presentation` | `balanced`, `dramatic`, `shells_dramatic` | preset lighting, exposure, starfield |
 | `camera_view` | `oblique`, `face_on` | `face_on` looks down the spin axis |
+| `camera_azimuth`, `camera_elevation` | degrees | orbit/tilt the camera on top of `camera_view` (`camera_zoom` frames it) |
+| `camera_latitude`, `camera_longitude` | degrees | absolute view: latitude above the equatorial plane, azimuth from `+x`; overrides `camera_view` |
+| `camera_latitude_end`, `camera_longitude_end` | degrees | animations only: fly the camera to this absolute angle by the final frame |
+| `camera_loop` | `True`/`False` | animations only: fly a full 360° and rise to `camera_latitude_end` (the peak) then back, ending on the opening view |
+| `waveform_transparent` | `True`/`False` | `True` (default) composites the strain panel over the scene so the background shows through; `False` is the opaque strip below |
 
 ## Two physical caveats
 
