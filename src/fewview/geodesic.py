@@ -251,6 +251,7 @@ def boyer_lindquist_equatorial(a, p, e, phi_r, phi_phi):
         get_kerr_geo_constants_of_motion,
     )
 
+    scalar = np.ndim(p) == 0 and np.ndim(e) == 0 and np.ndim(phi_r) == 0 and np.ndim(phi_phi) == 0
     p = np.atleast_1d(np.asarray(p, dtype=float))
     e = np.atleast_1d(np.asarray(e, dtype=float))
     phi_r = np.atleast_1d(np.asarray(phi_r, dtype=float))
@@ -269,4 +270,6 @@ def boyer_lindquist_equatorial(a, p, e, phi_r, phi_phi):
     q_r = _invert_phi_r(phi_r, omega_r, context)
     r = _radius_of_qr(q_r, context)
     phi = phi_phi - omega_phi * _t_r(q_r, context) + _phi_r(q_r, context)
+    if scalar:
+        return r.item(), phi.item()
     return r, phi
