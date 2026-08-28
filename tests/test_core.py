@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
@@ -27,6 +28,7 @@ from fewview._core import (
     build_strain_surface,
     choose_max_delay,
     estimate_waveform_period,
+    generate_relativistic_mode_waveform,
     polarizations_from_complex,
 )
 
@@ -648,6 +650,118 @@ class VisualizationTest(unittest.TestCase):
         primary, secondary, _, _ = self._drawn_bodies(waveform)
         self.assertLess(primary, 0.043)
         self.assertAlmostEqual(secondary / primary, 0.014 / 0.043)
+
+
+class PostAdiabaticBranchTest(unittest.TestCase):
+    """Test the Trajectory1PAT1R (post-adiabatic) branch in generate_relativistic_mode_waveform."""
+
+    def _build_mock_generator(self, n_sparse=10, n_modes=2):
+        """Build a mock FEW generator that mimics a Waveform1PAT1R model."""
+
+        t_sparse = np.linspace(0.0, 100.0, n_sparse)
+        p_sparse = np.linspace(10.0, 9.0, n_sparse)
+        e_sparse = np.zeros(n_sparse)
+        xI_sparse = np.ones(n_sparse)
+        Phi_phi_sparse = np.linspace(0.0, 6.0, n_sparse)
+        Phi_theta_sparse = np.zeros(n_sparse)
+        Phi_r_sparse = np.linspace(0.0, 3.0, n_sparse)
+        delta_m1_sparse = np.linspace(0.0, 0.01, n_sparse)
+        chit_sparse = np.linspace(0.0, 0.001, n_sparse)  # stored as delta
+
+        # Nine-column trajectory for post-adiabatic models
+        trajectory = [
+            t_sparse, p_sparse, e_sparse, xI_sparse,
+            Phi_phi_sparse, Phi_theta_sparse, Phi_r_sparse,
+            delta_m1_sparse, chit_sparse,
+        ]
+
+        # A mock class whose __name__ is "Trajectory1PAT1R"
+        class Trajectory1PAT1R:
+            args = {"chit1": 0.9, "nu": 1e-5, "chit2": 0.0}
+
+        # Build the mock generator hierarchy
+        generator = MagicMock()
+        type(generator).__name__ = "Waveform1PAT1R"
+        generator.inspiral_kwargs = {}
+        generator.sanity_check_init.return_value = (0.9, 1.0)
+        generator.sanity_check_traj.return_value = None
+        generator.inspiral_generator.return_value = trajectory
+        generator.inspiral_generator.func = Trajectory1PAT1R()
+
+        # Dense trajectory: columns are p, e, xI, Phi_phi, Phi_theta, Phi_r
+        n_dense = int((t_sparse[-1] - t_sparse[0]) / 10.0) + 1
+        dense = np.zeros((n_dense, 6))
+        dense[:, 0] = np.linspace(10.0, 9.0, n_dense)  # p
+        dense[:, 2] = 1.0  # xI
+        dense[:, 3] = np.linspace(0.0, 6.0, n_dense)  # Phi_phi
+        dense[:, 5] = np.linspace(0.0, 3.0, n_dense)  # Phi_r
+        generator.inspiral_generator.inspiral_generator.eval_integrator_spline.return_value = dense
+
+        # Amplitude generator with get_amplitudes for the post-adiabatic path
+        amp_gen = generator.amplitude_generator
+        amplitudes = np.random.default_rng(42).random((n_sparse, n_modes))
+        amp_gen.get_amplitudes.return_value = amplitudes
+        amp_gen.l_arr_no_mask = np.array([2, 2])
+        amp_gen.m_arr_no_mask = np.array([2, 1])
+        amp_gen.n_arr_no_mask = np.array([0, 0])
+
+        return generator
+
+    @patch("fewview._core._resolve_few_model")
+    def test_post_adiabatic_trajectory_is_unpacked(self, mock_resolve):
+        """The nine-column trajectory is correctly unpacked and amplitudes use evolving spin."""
+
+        mock_generator = self._build_mock_generator()
+        mock_resolve.return_value = mock_generator
+
+        # Mock the constants imported inside the function
+        constants_mock = MagicMock()
+        constants_mock.Gpc = 3.086e25
+        constants_mock.MRSUN_SI = 1477.0
+
+        with patch.dict("sys.modules", {"few.utils.constants": constants_mock}):
+            waveform = generate_relativistic_mode_waveform(
+                M=1e6, mu=10.0, a=0.9, p0=10.0, e0=0.0, T=0.001, dt=10.0,
+                model="Waveform1PAT1R",
+            )
+
+        self.assertIsInstance(waveform, RelativisticModeWaveform)
+        self.assertEqual(waveform.model, "Waveform1PAT1R")
+        # Verify the post-adiabatic amplitude path was used
+        mock_generator.amplitude_generator.get_amplitudes.assert_called_once()
+        call_kwargs = mock_generator.amplitude_generator.get_amplitudes.call_args
+        # Should have nu, chit2, chit, delta_m1 keyword arguments
+        self.assertIn("nu", call_kwargs.kwargs)
+        self.assertIn("chit2", call_kwargs.kwargs)
+        self.assertIn("chit", call_kwargs.kwargs)
+        self.assertIn("delta_m1", call_kwargs.kwargs)
+        # chit should be delta + chit1 baseline
+        chit_passed = call_kwargs.kwargs["chit"]
+        expected_chit1 = 0.9
+        self.assertTrue(np.all(chit_passed >= expected_chit1 - 1e-10))
+
+    @patch("fewview._core._resolve_few_model")
+    def test_post_adiabatic_waveform_has_modes(self, mock_resolve):
+        """Post-adiabatic branch produces a waveform with the expected mode structure."""
+
+        mock_generator = self._build_mock_generator()
+        mock_resolve.return_value = mock_generator
+
+        constants_mock = MagicMock()
+        constants_mock.Gpc = 3.086e25
+        constants_mock.MRSUN_SI = 1477.0
+
+        with patch.dict("sys.modules", {"few.utils.constants": constants_mock}):
+            waveform = generate_relativistic_mode_waveform(
+                M=1e6, mu=10.0, a=0.9, p0=10.0, e0=0.0, T=0.001, dt=10.0,
+                model="Waveform1PAT1R",
+            )
+
+        # Should have modes with negative-m partners included
+        self.assertGreater(waveform.modes.shape[1], 0)
+        self.assertEqual(waveform.time.shape[0], waveform.modes.shape[0])
+        # Trajectory should be populated
+        self.assertTrue(waveform.has_trajectory)
 
 
 if __name__ == "__main__":
