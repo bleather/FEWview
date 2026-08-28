@@ -1,3 +1,5 @@
+import os
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -55,21 +57,24 @@ class ClusterCameraFlagTests(unittest.TestCase):
         self.assertTrue(seg.waveform_transparent)  # transparent panel by default
 
     def test_camera_flight_settings_change_the_run_fingerprint(self):
-        # Different camera options must land in a different segment directory,
+        # Different camera options must produce a different run fingerprint,
         # so re-runs do not reuse another shot's completed segments.
-        base = self._job_args([])
-        loop = self._job_args(["--camera-loop", "--camera-latitude-end", "70"])
-        keys = (
-            "camera_loop",
-            "camera_latitude_end",
-            "camera_latitude",
-            "camera_longitude",
-            "waveform_transparent",
-        )
-        self.assertNotEqual(
-            tuple(getattr(base, k) for k in keys),
-            tuple(getattr(loop, k) for k in keys),
-        )
+        with tempfile.NamedTemporaryFile(suffix=".npz") as tmp:
+            tmp.write(b"dummy")
+            tmp.flush()
+            modes = Path(tmp.name)
+            mode_stat = modes.stat()
+
+            base = self._job_args([])
+            loop = self._job_args(["--camera-loop", "--camera-latitude-end", "70"])
+
+            fp_base = cluster_job._run_fingerprint(
+                base, cluster_job.RENDER_KEYS, modes, mode_stat
+            )
+            fp_loop = cluster_job._run_fingerprint(
+                loop, cluster_job.RENDER_KEYS, modes, mode_stat
+            )
+            self.assertNotEqual(fp_base, fp_loop)
 
 
 if __name__ == "__main__":

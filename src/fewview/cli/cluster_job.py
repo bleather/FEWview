@@ -16,6 +16,70 @@ DEFAULT_FRAMES = 1000
 # How many array tasks run at once when --max-concurrent is not given.
 DEFAULT_CONCURRENCY = 8
 
+RENDER_KEYS = (
+    "segments",
+    "frames",
+    "fps",
+    "component",
+    "flux_mode_combination",
+    "wave_cycles",
+    "animation_cycles",
+    "max_delay",
+    "start_time",
+    "end_time",
+    "normalization_time",
+    "normalization_samples",
+    "resolution",
+    "angular_sampling",
+    "polar_samples",
+    "azimuthal_samples",
+    "inner_window_fraction",
+    "outer_window_fraction",
+    "opacity_profile",
+    "color_scheme",
+    "presentation",
+    "color_exposure",
+    "background_color",
+    "opacity",
+    "shell_count",
+    "shell_min",
+    "shell_max",
+    "shell_width",
+    "shell_opacity_floor",
+    "shell_glow",
+    "smooth_sigma",
+    "opacity_unit_distance",
+    "width",
+    "height",
+    "image_scale",
+    "camera_view",
+    "camera_zoom",
+    "camera_orbit",
+    "camera_azimuth",
+    "camera_elevation",
+    "camera_latitude",
+    "camera_longitude",
+    "camera_latitude_end",
+    "camera_longitude_end",
+    "camera_zoom_end",
+    "camera_loop",
+    "starfield",
+    "star_count",
+    "bodies",
+    "trajectory",
+    "waveform_panel",
+    "waveform_transparent",
+    "trajectory_tail_cycles",
+    "trajectory_line_width",
+    "trajectory_color",
+    "body_exaggeration",
+    "trajectory_tube",
+    "orbit_display_radius",
+    "waveform_fraction",
+    "waveform_font_style",
+    "waveform_style_file",
+)
+
 
 def _positive(value: str) -> int:
     parsed = int(value)
@@ -458,6 +522,19 @@ def _worker_arguments(
     return values
 
 
+def _run_fingerprint(args, render_keys, modes, mode_stat):
+    """Return a short hash identifying the render configuration."""
+    fingerprint_source = repr(
+        (
+            str(modes),
+            mode_stat.st_size,
+            mode_stat.st_mtime_ns,
+            tuple((key, getattr(args, key)) for key in render_keys),
+        )
+    )
+    return hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:12]
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     # Resolve the movie length down to a frame count before it reaches the run
@@ -497,79 +574,8 @@ def main(argv: list[str] | None = None) -> int:
         args.segments,
         args.max_concurrent or DEFAULT_CONCURRENCY,
     )
-    render_keys = (
-        "segments",
-        "frames",
-        "fps",
-        "component",
-        "flux_mode_combination",
-        "wave_cycles",
-        "animation_cycles",
-        "max_delay",
-        "start_time",
-        "end_time",
-        "normalization_time",
-        "normalization_samples",
-        "resolution",
-        "angular_sampling",
-        "polar_samples",
-        "azimuthal_samples",
-        "inner_window_fraction",
-        "outer_window_fraction",
-        "opacity_profile",
-        "color_scheme",
-        "presentation",
-        "color_exposure",
-        "background_color",
-        "opacity",
-        "shell_count",
-        "shell_min",
-        "shell_max",
-        "shell_width",
-        "shell_opacity_floor",
-        "shell_glow",
-        "smooth_sigma",
-        "opacity_unit_distance",
-        "width",
-        "height",
-        "image_scale",
-        "camera_view",
-        "camera_zoom",
-        "camera_orbit",
-        "camera_azimuth",
-        "camera_elevation",
-        "camera_latitude",
-        "camera_longitude",
-        "camera_latitude_end",
-        "camera_longitude_end",
-        "camera_zoom_end",
-        "camera_loop",
-        "starfield",
-        "star_count",
-        "bodies",
-        "trajectory",
-        "waveform_panel",
-        "waveform_transparent",
-        "trajectory_tail_cycles",
-        "trajectory_line_width",
-        "trajectory_color",
-        "body_exaggeration",
-        "trajectory_tube",
-        "orbit_display_radius",
-        "waveform_fraction",
-        "waveform_font_style",
-        "waveform_style_file",
-    )
     mode_stat = modes.stat()
-    fingerprint_source = repr(
-        (
-            str(modes),
-            mode_stat.st_size,
-            mode_stat.st_mtime_ns,
-            tuple((key, getattr(args, key)) for key in render_keys),
-        )
-    )
-    run_id = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:12]
+    run_id = _run_fingerprint(args, RENDER_KEYS, modes, mode_stat)
     logs_dir = job_dir / "logs"
     segments_dir = job_dir / "segments" / run_id
     logs_dir.mkdir(parents=True, exist_ok=True)
