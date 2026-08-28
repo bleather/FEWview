@@ -17,7 +17,7 @@ ACCOUNT="normal"                   # Slurm account ("" = your default)
 CONDA_ENV="few_env"                # env with fewview + FastEMRIWaveforms
 CONDA_MODULE=""                    # leave "" to use your own conda already on PATH
 JOBDIR="$HOME/emri/zoom-inspiral-job"
-MERGE_PARTITION=""                 # "" merges on the login node manually (see note); or a non-amd CPU partition
+MERGE_PARTITION=""                 # "" uses your default Slurm partition; set a non-amd CPU partition or merge manually
 
 # Mode file written by `fewview-render` (arg 1 overrides the default path).
 MODES="${1:-$HOME/emri/relativistic-modes.npz}"
