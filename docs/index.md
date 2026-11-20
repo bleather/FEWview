@@ -16,6 +16,13 @@ use `python -m pip install "git+https://github.com/bleather/FEWview.git"`.
 You can also pass the path to a release wheel directly to pip.
 On macOS use a native arm64 Python on macOS 14 or later, the platform covered
 by the [public FEW wheels](https://pypi.org/project/fastemriwaveforms/#files).
+On a headless Ubuntu machine, install Mesa's software renderer before making
+a 3D still or movie:
+
+```bash
+sudo apt-get update
+sudo apt-get install libegl1 libegl-mesa0 libgl1-mesa-dri
+```
 
 ```bash
 fewview-render --model Circ1PAT1R --a 0.00001 --chi2 0.3 --p0 10 --e0 0 \

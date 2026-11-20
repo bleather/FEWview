@@ -28,6 +28,10 @@ FEW downloads the data for each model
 on first use. The default eccentric Kerr model needs about 5 GB for its
 amplitude table. The circular example below uses a few MB.
 
+On a headless Ubuntu machine, install the
+[Mesa rendering libraries](https://github.com/bleather/FEWview/blob/main/docs/index.md#first-render)
+before making a 3D still or movie.
+
 ## Render a waveform
 
 This example follows a ten-solar-mass secondary on a circular orbit around a
