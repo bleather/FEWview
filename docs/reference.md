@@ -8,7 +8,9 @@
 | `FastSchwarzschildEccentricFlux` | Eccentric Schwarzschild | Set `a=0`. Its amplitude table extends to radial harmonic 30. |
 | `Circ1PAT1R` | Quasicircular, slowly spinning primary, first post-adiabatic order | Set `e0=0` and `xI0=1`. Pass the dimensionless secondary spin as `chi2` (default 0). |
 
-FEWview 0.1 targets the public FEW 2.2 series. FEW supplies the
+FEWview 0.1 targets the public FEW 2.2 series. On x86-64 Linux, pip selects
+2.2.1.post1 or later for the [CPU wheel fix](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms/releases/tag/v2.2.1.post1).
+FEW supplies the
 allowed parameter bounds for each model. The exact functions and citations
 for a model are in the [FEW documentation](https://fastemriwaveforms.readthedocs.io/en/stable/).
 

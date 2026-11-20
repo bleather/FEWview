@@ -22,9 +22,15 @@ To install directly from GitHub, run
 python -m pip install "git+https://github.com/bleather/FEWview.git"
 ```
 
-Pip installs the public CPU build of FEW 2.2.x. FEW downloads the data for each model
+Pip installs the public CPU build of FEW 2.2.x. On x86-64 Linux the minimum
+is 2.2.1.post1, which fixes CPU compatibility in the published wheels.
+FEW downloads the data for each model
 on first use. The default eccentric Kerr model needs about 5 GB for its
 amplitude table. The circular example below uses a few MB.
+
+On a headless Ubuntu machine, install the
+[Mesa rendering libraries](https://github.com/bleather/FEWview/blob/main/docs/index.md#first-render)
+before making a 3D still or movie.
 
 ## Render a waveform
 
