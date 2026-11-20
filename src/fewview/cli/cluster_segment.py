@@ -166,6 +166,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--trajectory-color", default="#00b7ff")
     parser.add_argument("--body-exaggeration", type=float, default=2.0)
     parser.add_argument(
+        "--source-glow",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="shade the primary and render the trajectory as a glowing 3D tube",
+    )
+    parser.add_argument(
         "--trajectory-tube",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -298,6 +304,7 @@ def main(argv: list[str] | None = None) -> int:
         trajectory_color=args.trajectory_color,
         body_exaggeration=args.body_exaggeration,
         trajectory_as_tube=args.trajectory_tube,
+        source_glow=args.source_glow,
         orbit_display_radius=args.orbit_display_radius,
         waveform_fraction=args.waveform_fraction,
         waveform_font_style=args.waveform_font_style,

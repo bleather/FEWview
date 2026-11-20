@@ -8,6 +8,7 @@ from fewview._core import (
     _PRESET_CAMERA_DISTANCE,
     _PRIMARY_HALO_SCALE,
     _SECONDARY_BODY_SCALE,
+    _add_glowing_trail,
     _apply_camera_offset,
     _camera_angle_vectors,
     _combine_frame_and_panel,
@@ -18,6 +19,7 @@ from fewview._core import (
     _resolve_opacity,
     _resolve_opacity_unit_distance,
     _resolve_volume_presentation,
+    _set_polyline_points,
     _smooth_render_field,
     _validate_volume_presentation,
     _volume_colormap,
@@ -38,6 +40,29 @@ class VisualizationTest(unittest.TestCase):
         self.time = np.linspace(0.0, 4.0, 9)
         self.h_plus = self.time + 1.0
         self.h_cross = 0.5 * (self.time + 1.0)
+
+    def test_glow_tubes_follow_the_animated_tail(self):
+        import pyvista as pv
+
+        line = pv.PolyData()
+        _set_polyline_points(line, np.zeros((2, 3)), color="deepskyblue")
+        plotter = MagicMock()
+        _add_glowing_trail(plotter, line, tube_radius=0.015)
+        tubes = [call.args[0] for call in plotter.add_mesh.call_args_list]
+        self.assertGreater(len(tubes), 1)
+        for tube in tubes:
+            tube.Update()
+            self.assertEqual(tube.GetOutput().GetNumberOfCells(), 0)
+
+        points = np.array([[0., 0., 0.], [1., 1., 0.], [2., 0., 0.]])
+        for offset in (0.0, 4.0):
+            _set_polyline_points(line, points + offset, color="deepskyblue")
+            for tube in tubes:
+                tube.Update()
+                surface = pv.wrap(tube.GetOutput())
+                self.assertGreater(surface.n_cells, 0)
+                self.assertAlmostEqual(surface.center[0], offset + 1)
+                self.assertGreater(np.ptp(surface["trajectory_rgba"][:, 3]), 0)
 
     def test_public_complex_convention(self):
         strain = self.h_plus - 1j * self.h_cross

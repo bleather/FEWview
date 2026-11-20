@@ -74,6 +74,7 @@ RENDER_KEYS = (
     "trajectory_color",
     "body_exaggeration",
     "trajectory_tube",
+    "source_glow",
     "orbit_display_radius",
     "waveform_fraction",
     "waveform_font_style",
@@ -383,6 +384,12 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--trajectory-color", default="#00b7ff")
     render.add_argument("--body-exaggeration", type=float, default=2.0)
     render.add_argument(
+        "--source-glow",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="shade the primary and render the trajectory as a glowing 3D tube",
+    )
+    render.add_argument(
         "--trajectory-tube",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -489,6 +496,7 @@ def _worker_arguments(
         args.waveform_font_style,
         "--bodies" if args.bodies else "--no-bodies",
         "--trajectory" if args.trajectory else "--no-trajectory",
+        "--source-glow" if args.source_glow else "--no-source-glow",
         "--trajectory-tube" if args.trajectory_tube else "--no-trajectory-tube",
         "--waveform-panel" if args.waveform_panel else "--no-waveform-panel",
         "--camera-loop" if args.camera_loop else "--no-camera-loop",

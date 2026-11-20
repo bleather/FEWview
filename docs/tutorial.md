@@ -77,7 +77,12 @@ fv.render_mode_frame(
 
 The central bodies are drawn on the scale of the orbit. The fading trail
 marks the recent trajectory of the secondary. Set `trajectory_color` to any
-Matplotlib colour.
+Matplotlib colour. For a rim-lit horizon marker and a glowing 3D trail, use
+`source_glow=True, trajectory_color="#33baff"` in a frame or movie, or pass
+`--source-glow --trajectory-color "#33baff"` to the animation CLI. The trail
+is a tube in scene coordinates, so the camera can see it pass behind the
+primary. In this style, `trajectory_line_width` scales the tube radius with
+the displayed orbit. Lighting and glow are illustrative.
 
 ## 4. A different look: face-on
 
