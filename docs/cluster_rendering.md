@@ -16,8 +16,7 @@ appears.
 
 1. **Fewview installed in an environment on the cluster**, alongside your
    FastEMRIWaveforms install (see below).
-2. **The `relativistic-modes.npz` file** written by `fewview-render` (or the
-   `visualize_emri_waveform` workflow). It already contains the waveform modes
+2. **The `relativistic-modes.npz` file** written by `fewview-render`. It already contains the waveform modes
    and trajectory, so nothing else needs to be transferred.
 
 Copy the mode file across, for example:
@@ -38,10 +37,9 @@ render job. A conda environment is convenient:
 ```bash
 module avail                      # find your cluster's conda/python module
 module load <conda-module>
-conda create -n fewview python=3.11
+conda create -n fewview python=3.12
 conda activate fewview
-# install your existing FastEMRIWaveforms build, then:
-pip install fewview
+python -m pip install "git+https://github.com/bleather/FEWview.git"
 ```
 
 The generated jobs activate this environment on each node. Pass

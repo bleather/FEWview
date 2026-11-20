@@ -354,8 +354,10 @@ class VisualizationTest(unittest.TestCase):
         self.assertAlmostEqual(longitude, 30.0, places=6)
         # Distance scales with the volume radius so framing tracks the presets.
         self.assertAlmostEqual(distance, _PRESET_CAMERA_DISTANCE * radius, places=6)
-        # Away from the poles the spin axis is the view-up reference.
-        self.assertEqual(tuple(view_up), (0.0, 0.0, 1.0))
+        # View-up is the projection of the spin axis onto the sky plane.
+        sightline = position / distance
+        north = np.array([0., 0., 1.]) - sightline[2] * sightline
+        np.testing.assert_allclose(view_up, north / np.linalg.norm(north))
 
         # At the equator the camera lies in the equatorial plane.
         equator, _ = _camera_angle_vectors(1.0, 0.0, 90.0)

@@ -11,7 +11,7 @@ import unittest
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from few.utils.utility import (
+from few.utils.geodesic import (
     get_fundamental_frequencies,
     get_kerr_geo_constants_of_motion,
 )

@@ -1,0 +1,97 @@
+name: Package and test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install build twine 'mkdocs>=1.6,<2'
+      - run: python -m build
+      - run: python -m twine check --strict dist/*
+      - run: python -m mkdocs build --strict
+      - run: python -m zipfile -c dist/fewview-html.zip site
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distribution
+          path: dist/
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - python: '3.12'
+            few: fastemriwaveforms==2.2.0
+          - python: '3.13'
+            few: fastemriwaveforms==2.2.1
+          - python: '3.14'
+            few: fastemriwaveforms
+    env:
+      MPLBACKEND: Agg
+      NUMBA_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: distribution
+          path: dist/
+      - name: Install the built wheel
+        env:
+          FEW_REQUIREMENT: ${{ matrix.few }}
+        run: |
+          python -m pip install dist/*.whl "$FEW_REQUIREMENT" pytest
+          python -m pip check
+      - run: python -m pytest -q -m 'not few_data'
+      - run: python -m pytest -q -m few_data -k Circ1PAT1R
+      - name: Compare eccentric waveforms before release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        run: python -m pytest -q -m few_data -k 'not Circ1PAT1R'
+      - name: Render from installed commands
+        run: |
+          fewview-render --model Circ1PAT1R --a 0.00001 --p0 10 --e0 0 --chi2 0.3 \
+            --T 0.0002 --grid-resolution 24 --image-width 320 --image-height 240 --output-dir smoke
+          fewview-animate smoke/relativistic-modes.npz --frames 2 --fps 2 \
+            --grid-resolution 24 --width 320 --height 240 --output smoke/orbit.mp4
+          test -s smoke/relativistic-emri-volume.png
+          test -s smoke/orbit.mp4
+          fewview-cluster-job --help
+          fewview-cluster-segment --help
+          fewview-cluster-merge --help
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: distribution
+          path: dist/
+      - name: Draft GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          wheel=(dist/*.whl)
+          version=$(unzip -p "${wheel[0]}" '*/METADATA' | sed -n 's/^Version: //p' | head -1)
+          test "$GITHUB_REF_NAME" = "v$version"
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --draft --generate-notes

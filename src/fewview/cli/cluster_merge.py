@@ -43,12 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         formatted = "\n  ".join(missing)
         raise SystemExit(f"Cannot merge; files are missing:\n  {formatted}")
 
-    try:
-        import imageio_ffmpeg
-    except ImportError as exc:
-        raise SystemExit(
-            "imageio-ffmpeg is required; install the visualization extra"
-        ) from exc
+    import imageio_ffmpeg
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     manifest = args.segments_dir / "segments.ffconcat"

@@ -44,6 +44,7 @@ VolumeColorScheme = Literal[
     "cool",
     "blues",
     "cinematic",
+    "ice",
 ]
 
 # Palettes handed straight to Matplotlib. The values are the Matplotlib names,
@@ -60,7 +61,7 @@ _MATPLOTLIB_COLOR_SCHEMES = {
     "blues": "Blues",
 }
 
-# Every accepted scheme: the Matplotlib passthroughs plus the two hand-built
+# Every accepted scheme: the Matplotlib passthroughs plus the hand-built
 # sequences assembled in ``_volume_colormap``.
 _VOLUME_COLOR_SCHEMES = frozenset(_MATPLOTLIB_COLOR_SCHEMES) | {
     "rainbow",
@@ -254,7 +255,7 @@ class RelativisticModeWaveform:
         return 1.0 + np.sqrt(1.0 - spin**2)
 
     def strain(self, theta: float, phi: float) -> np.ndarray:
-        """Return :math:`h_+-i h_\times` for one source-frame direction."""
+        r"""Return :math:`h_+-i h_\times` for one source-frame direction."""
 
         ylms = GetYlms(force_backend="cpu")(self.ell, self.m, theta, phi)
         return self.modes @ _as_numpy(ylms)
@@ -309,9 +310,11 @@ class RelativisticModeWaveform:
         if method == "exact" and self.spin is not None:
             from .geodesic import boyer_lindquist_equatorial
 
+            orientation = -1 if self.trajectory_xI[0] < 0 else 1
             radial_position, phi = boyer_lindquist_equatorial(
-                float(self.spin), p, e, phi_r, phi_phi
+                orientation * float(self.spin), p, e, phi_r, orientation * phi_phi
             )
+            phi = orientation * phi
         else:
             radial_position = p / (1.0 + e * np.cos(phi_r))
             phi = phi_phi
@@ -382,17 +385,18 @@ def _resolve_few_model(model, lmax, nmax, force_backend):
 
     if not isinstance(model, str):
         return model
-    from few.waveform import waveform as few_waveform
+    from few import waveform as few_waveform
+    from few.waveform.base import SphericalHarmonicWaveformBase
+
+    if model == "Waveform1PAT1R":
+        model = "Circ1PAT1R"
 
     model_cls = getattr(few_waveform, model, None)
     if model_cls is None:
         raise ValueError(f"unknown FEW waveform model {model!r}")
-    try:
-        return model_cls(lmax=lmax, nmax=nmax, force_backend=force_backend)
-    except TypeError:
-        # Models that do not take lmax/nmax (e.g. Waveform1PAT1R) select modes
-        # through a mode selector instead.
-        return model_cls(force_backend=force_backend)
+    if not isinstance(model_cls, type) or not issubclass(model_cls, SphericalHarmonicWaveformBase):
+        raise ValueError(f"{model!r} is not a mode-resolved FEW waveform model")
+    return model_cls(lmax=lmax, nmax=nmax, force_backend=force_backend)
 
 
 def generate_relativistic_mode_waveform(
@@ -414,22 +418,24 @@ def generate_relativistic_mode_waveform(
     max_teukolsky_modes: Optional[int] = None,
     interpolation_chunk_size: int = 256,
     force_backend: str = "cpu",
-    model: "str | object" = "FastKerrEccentricEquatorialFlux",
+    chi2: float = 0.0,
+    model: object = "FastKerrEccentricEquatorialFlux",
 ) -> RelativisticModeWaveform:
     r"""Generate full-sky modes with a FEW mode-resolved waveform model.
 
     A FEW trajectory supplies the phases, the model's amplitude module supplies
     complex ``(l,m,n)`` amplitudes, and the harmonics are combined into
     uniformly sampled ``(l,m)`` modes.  With the default ``power_fraction=1``
-    and no mode cap, all available modes are used.
+    and no mode cap, every mode within ``lmax`` and ``nmax`` is used.
 
     ``model`` selects the FEW waveform model. It may be the name of a class in
     :mod:`few.waveform` (default ``"FastKerrEccentricEquatorialFlux"``) or an
     already-instantiated FEW waveform object, which lets you configure a model
-    however you like before handing it in. Any mode-resolved
-    ``SphericalHarmonicWaveformBase`` model is supported, including the flux
-    family and the post-adiabatic ``Waveform1PAT1R`` (a circular model that
-    evolves the primary's mass and spin).
+    before handing it in. Supported models include the eccentric flux family
+    and the post-adiabatic ``Circ1PAT1R`` (a circular model that
+    evolves the primary's mass and spin). For this model, ``chi2`` is the
+    dimensionless secondary spin. ``M`` and ``mu`` are component masses in solar
+    masses, ``T`` is in years, ``dt`` in seconds, and ``dist`` in Gpc.
 
     ``power_fraction`` and ``max_teukolsky_modes`` are optional rendering-speed
     controls.  Selection is based on sky-integrated mode power, including the
@@ -449,10 +455,23 @@ def generate_relativistic_mode_waveform(
 
     from scipy.interpolate import CubicSpline
 
+    from few.trajectory.ode.circ1pat1r import TrajectoryCirc1PAT1R
     from few.utils.constants import Gpc, MRSUN_SI
 
     generator = _resolve_few_model(model, lmax, nmax, force_backend)
+
+    circular_1pa = isinstance(generator.inspiral_generator.func, TrajectoryCirc1PAT1R)
+    if chi2 != 0.0 and not circular_1pa:
+        raise ValueError("chi2 is supported only for Circ1PAT1R")
+    if circular_1pa and xI0 != 1.0:
+        raise ValueError("Circ1PAT1R requires xI0=1")
+    # FEW evaluates a negative-inclination orbit at (pi-theta, -phi)
+    # in a frame with both spin and inclination reversed.
+    orientation = -1 if xI0 < 0 else 1
+    source_spin = a
+    a, xI0 = orientation * a, orientation * xI0
     a, xI0 = generator.sanity_check_init(M, mu, a, p0, e0, xI0)
+    spin_args = (chi2,) if circular_1pa else ()
     trajectory = generator.inspiral_generator(
         M,
         mu,
@@ -460,6 +479,7 @@ def generate_relativistic_mode_waveform(
         p0,
         e0,
         xI0,
+        *spin_args,
         Phi_phi0=Phi_phi0,
         Phi_theta0=0.0,
         Phi_r0=Phi_r0,
@@ -467,37 +487,26 @@ def generate_relativistic_mode_waveform(
         dt=dt,
         **generator.inspiral_kwargs,
     )
+    t_sparse, p, e, xI, _, _, _, *primary_evolution = trajectory
+    generator.sanity_check_traj(a, p, e, xI)
     amplitude_generator = generator.amplitude_generator
+    amplitude_args = ()
+    if circular_1pa:
+        delta_mass, delta_spin = primary_evolution
+        nu = generator.inspiral_generator.func.args["nu"]
+        amplitude_args = (nu, chi2, delta_spin, delta_mass)
 
-    # Post-adiabatic models (Trajectory1PAT1R) also evolve the primary's mass
-    # and spin, so the trajectory carries two extra columns and the amplitudes
-    # depend on the instantaneous spin; the flux family does not.
-    evolves_primary = (
-        type(generator.inspiral_generator.func).__name__ == "Trajectory1PAT1R"
-    )
-    if evolves_primary:
-        t_sparse, p, e, xI, _, _, _, delta_m1, chit = (
-            _as_numpy(value) for value in trajectory
-        )
+    if type(generator.inspiral_generator.func).__name__ == "Trajectory1PAT1R":
+        # Pre-release model instances take absolute reduced spin.
+        delta_mass, delta_spin = primary_evolution
         ode_args = generator.inspiral_generator.func.args
-        chit = chit + float(ode_args["chit1"])  # stored as delta chit1
-        generator.sanity_check_traj(a, p, e, xI)
-        amplitudes = _as_numpy(
-            amplitude_generator.get_amplitudes(
-                a,
-                p,
-                e,
-                xI,
-                nu=float(ode_args["nu"]),
-                chit2=float(ode_args["chit2"]),
-                chit=chit,
-                delta_m1=delta_m1,
-            )
+        amplitudes = amplitude_generator.get_amplitudes(
+            a, p, e, xI, nu=ode_args["nu"], chit2=ode_args["chit2"],
+            chit=delta_spin + ode_args["chit1"], delta_m1=delta_mass,
         )
     else:
-        t_sparse, p, e, xI, _, _, _ = (_as_numpy(value) for value in trajectory)
-        generator.sanity_check_traj(a, p, e, xI)
-        amplitudes = _as_numpy(amplitude_generator(a, p, e, xI0))
+        amplitudes = amplitude_generator(a, p, e, xI, *amplitude_args)
+    amplitudes = _as_numpy(amplitudes)
 
     # Label the amplitude columns from the amplitude module's own index arrays,
     # not the outer generator's. The amplitude model is trained to a fixed
@@ -530,16 +539,19 @@ def generate_relativistic_mode_waveform(
             stacklevel=2,
         )
 
+    # FEW's amplitude module can have a larger basis than the outer model.
+    eligible = np.flatnonzero((ell_all <= lmax) & (np.abs(n_all) <= nmax))
+    if not eligible.size:
+        raise ValueError("lmax and nmax exclude all available modes")
+
     # The factor of two accounts for the symmetry-related negative-m partner.
     power = np.mean(np.abs(amplitudes) ** 2, axis=0)
     power *= np.where(m_all > 0, 2.0, 1.0)
-    order = np.argsort(power)[::-1]
-    target = power_fraction * float(np.sum(power))
-    count = int(np.searchsorted(np.cumsum(power[order]), target, side="left") + 1)
-    # searchsorted can land one past the end when the cumulative power reaches
-    # the target only at the final mode (e.g. power_fraction=1.0 with rounding),
-    # which would otherwise report more modes used than exist.
-    count = min(count, available)
+    order = eligible[np.argsort(power[eligible])[::-1]]
+    count = len(order)
+    if power_fraction < 1.0:
+        cumulative = np.cumsum(power[order])
+        count = int(np.searchsorted(cumulative, power_fraction * cumulative[-1])) + 1
     if max_teukolsky_modes is not None:
         count = min(count, max_teukolsky_modes)
     selected = np.sort(order[:count])
@@ -547,7 +559,6 @@ def generate_relativistic_mode_waveform(
 
     ell_selected = ell_all[selected]
     m_selected = m_all[selected]
-    n_selected = n_all[selected]
     positive_lm = sorted(set(zip(ell_selected.tolist(), m_selected.tolist())))
     all_lm = sorted(
         set(positive_lm)
@@ -593,8 +604,14 @@ def generate_relativistic_mode_waveform(
                     positive_modes[:, local_index]
                 )
 
+    if orientation < 0:
+        # Rotate the spin-weighted basis back into the caller's source frame.
+        modes = modes[:, [lm_index[(l, -m_val)] for l, m_val in all_lm]]
+        modes *= (-1) ** ell
+
     if dist is not None:
-        distance_dimensionless = (dist * Gpc) / (mu * MRSUN_SI)
+        reduced_mass = M * mu / (M + mu)
+        distance_dimensionless = (dist * Gpc) / (reduced_mass * MRSUN_SI)
         modes /= distance_dimensionless
 
     return RelativisticModeWaveform(
@@ -607,12 +624,12 @@ def generate_relativistic_mode_waveform(
         retained_power_fraction=retained_power,
         trajectory_p=dense_p,
         trajectory_e=dense_e,
-        trajectory_xI=dense_xI,
-        trajectory_phi_phi=Phi_phi,
+        trajectory_xI=orientation * dense_xI,
+        trajectory_phi_phi=orientation * Phi_phi,
         trajectory_phi_r=Phi_r,
         primary_mass=float(M),
         secondary_mass=float(mu),
-        spin=float(a),
+        spin=float(source_spin),
         model=type(generator).__name__,
     )
 
@@ -1508,19 +1525,8 @@ def _zero_coordinate_plane(
 
 
 def to_pyvista(volume: RetardedTimeVolume):
-    """Convert a volume to ``pyvista.ImageData``.
-
-    PyVista is optional. Install the ``visualization`` extra to use this
-    function.
-    """
-
-    try:
-        import pyvista as pv
-    except ImportError as exc:  # pragma: no cover - depends on optional package
-        raise ImportError(
-            "PyVista is required for volume rendering. Install FEW with "
-            "`pip install -e '.[visualization]'`."
-        ) from exc
+    """Convert a volume to ``pyvista.ImageData``."""
+    import pyvista as pv
 
     grid = pv.ImageData()
     grid.dimensions = volume.plus.shape
@@ -1578,9 +1584,8 @@ def _camera_angle_vectors(
 
     ``latitude`` is degrees above the equatorial plane and ``longitude`` is the
     azimuth in degrees measured from the ``+x`` axis toward ``+y``. The spin
-    axis is used as the view-up reference, except within one degree of a pole
-    where it becomes parallel to the view direction and a horizontal up is used
-    instead.
+    axis projects towards increasing latitude on the sky. At the poles the
+    longitude fixes the horizontal view-up direction.
     """
 
     lat = np.deg2rad(latitude)
@@ -1858,10 +1863,7 @@ def render_volume(
     if image_scale < 1:
         raise ValueError("image_scale must be at least 1")
     grid = to_pyvista(volume)
-    try:
-        import pyvista as pv
-    except ImportError:  # pragma: no cover - guarded by to_pyvista
-        raise
+    import pyvista as pv
 
     field = volume.component(component)
     maximum = float(np.max(np.abs(field)))
@@ -2537,16 +2539,10 @@ def render_mode_frame(
     if (show_bodies or show_trajectory) and not waveform.has_trajectory:
         raise ValueError(
             "Body and trajectory rendering requires the FEW trajectory arrays. "
-            "Regenerate relativistic-modes.npz with visualize_emri_waveform.py."
+            "Regenerate relativistic-modes.npz with fewview-render."
         )
 
-    try:
-        import imageio.v2 as imageio
-    except ImportError as exc:  # pragma: no cover - optional dependency
-        raise ImportError(
-            "Still export requires imageio. Install FEW with "
-            "`pip install -e '.[visualization]'`."
-        ) from exc
+    import imageio.v2 as imageio
 
     time = np.asarray(waveform.time, dtype=float)
     frame = float(time[-1] if frame_time is None else frame_time)
@@ -2866,18 +2862,12 @@ def render_mode_animation(
     if (show_bodies or show_trajectory) and not waveform.has_trajectory:
         raise ValueError(
             "Body and trajectory rendering requires the FEW trajectory arrays. "
-            "Regenerate relativistic-modes.npz with visualize_emri_waveform.py."
+            "Regenerate relativistic-modes.npz with fewview-render."
         )
     if suffix == ".mp4" and any(size % 2 for size in window_size):
         raise ValueError("MP4 window dimensions must both be even")
 
-    try:
-        import imageio.v2 as imageio
-    except ImportError as exc:  # pragma: no cover - optional dependency
-        raise ImportError(
-            "Animation export requires imageio and imageio-ffmpeg. Install "
-            "FEW with `pip install -e '.[visualization]'`."
-        ) from exc
+    import imageio.v2 as imageio
 
     time = np.asarray(waveform.time, dtype=float)
     start = float(time[0] + max_delay if start_time is None else start_time)

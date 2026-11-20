@@ -5,3 +5,7 @@ build/
 dist/
 .venv/
 .ipynb_checkpoints/
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+/site/

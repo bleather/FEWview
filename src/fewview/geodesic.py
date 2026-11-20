@@ -246,7 +246,7 @@ def boyer_lindquist_equatorial(a, p, e, phi_r, phi_phi):
         ``r = p/(1 + e cos Phi_r)`` approximation.
     """
 
-    from few.utils.utility import (
+    from few.utils.geodesic import (
         get_fundamental_frequencies,
         get_kerr_geo_constants_of_motion,
     )

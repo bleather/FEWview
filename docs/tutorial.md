@@ -1,22 +1,15 @@
-# Tutorial
+# Python tutorial
 
-This walkthrough renders a still and a short movie from a FEW EMRI waveform. It
-mirrors [`examples/tutorial.ipynb`](../examples/tutorial.ipynb); run that
-notebook for an executable version with embedded images.
-
-Fewview reads FastEMRIWaveforms models directly, so install it into the same
-environment as your existing FEW install:
-
-```bash
-pip install fewview
-```
+This walkthrough renders a still and a short movie from a FEW EMRI waveform. The [example notebook](https://github.com/bleather/FEWview/blob/main/examples/tutorial.ipynb)
+contains executable versions of the figures. Follow the [installation instructions](index.md)
+before running the examples below.
 
 ## 1. Generate a waveform
 
 `generate_relativistic_mode_waveform` runs the fully relativistic
 `FastKerrEccentricEquatorialFlux` model and returns a `RelativisticModeWaveform`
-carrying the individual $h_{\ell m}(t)$ modes and the FEW inspiral trajectory.
-This is the one slow step; everything downstream is fast.
+carrying the individual radiative modes and the FEW inspiral trajectory.
+The Kerr amplitude table takes about 5 GB on disk.
 
 ```python
 import numpy as np
@@ -82,9 +75,9 @@ fv.render_mode_frame(
 )
 ```
 
-The central bodies are drawn on the orbit's own scale — the primary spans a few
-horizon radii $r_+$ — with a fading inspiral trail behind the secondary
-(`trajectory_color` accepts any Matplotlib colour).
+The central bodies are drawn on the scale of the orbit. The fading trail
+marks the recent trajectory of the secondary. Set `trajectory_color` to any
+Matplotlib colour.
 
 ## 4. A different look: face-on
 
@@ -110,10 +103,10 @@ fv.render_mode_frame(
 ## 5. A different field: energy flux
 
 The looks above render the strain (`component="plus"`), but Fewview can also
-show the outgoing energy flux $|\dot h|^2$. Pair `component="energy_flux"` with
+show the outgoing energy flux `|dh/dt|²`. Pair `component="energy_flux"` with
 `opacity_profile="flux"`: the profile keeps the dim troughs between wavefronts
 transparent and lets only the bright crests turn solid, so the flux reads as a
-set of nested luminous shells with the equatorial null showing through instead
+set of nested luminous shells with the lower-flux regions showing through instead
 of a filled ball. It looks best with `presentation="shells_dramatic"` and an
 oblique camera, and the structure is strongest at higher eccentricity.
 
@@ -202,7 +195,7 @@ fv.render_mode_animation(
 | --- | --- | --- |
 | `component` | `plus`, `cross`, `amplitude`, `energy_flux` | `cross` is zero on the equatorial plane; `amplitude` is basis-independent |
 | `opacity_profile` | `soft`, `bands`, `shells`, `flux` | `shells` needs `plus`/`cross`; `flux` needs `energy_flux` |
-| `color_scheme` | Matplotlib names + `rainbow`, `aurora`, `cinematic` | `fv.available_color_schemes()` lists them |
+| `color_scheme` | `plasma`, `rainbow`, `ice`, etc. | `fv.available_color_schemes()` lists them |
 | `presentation` | `balanced`, `dramatic`, `shells_dramatic` | preset lighting, exposure, starfield |
 | `camera_view` | `oblique`, `face_on` | `face_on` looks down the spin axis |
 | `camera_azimuth`, `camera_elevation` | degrees | orbit/tilt the camera on top of `camera_view` (`camera_zoom` frames it) |
@@ -219,7 +212,7 @@ fv.render_mode_animation(
   raising `resolution` makes it sharper, not fainter. `amplitude` and
   `energy_flux` are immune.
 - **The equatorial gap** for `component="cross"` is physical, not a bug:
-  $h_\times \propto \cos\theta$ vanishes on the equatorial plane for an
+  the cross polarisation vanishes on the equatorial plane for an
   equatorial orbit. Use `plus` to avoid it.
 
 ## Cluster rendering

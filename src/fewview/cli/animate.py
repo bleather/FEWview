@@ -10,12 +10,12 @@ from pathlib import Path
 import numpy as np
 
 from fewview import (
-    RelativisticModeWaveform,
     choose_max_delay,
     estimate_waveform_period,
     render_mode_animation,
 )
 
+from fewview._archive import load_mode_waveform
 
 logger = logging.getLogger("fewview.cli.animate")
 
@@ -30,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "modes_file",
         type=Path,
-        help="relativistic-modes.npz produced by visualize_emri_waveform.py",
+        help="relativistic-modes.npz produced by fewview-render",
     )
     parser.add_argument(
         "--output",
@@ -238,43 +238,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional Matplotlib .mplstyle file for the waveform panel",
     )
     return parser
-
-
-def _optional_array(data, name: str):
-    return np.asarray(data[name]) if name in data.files else None
-
-
-def _optional_float(data, name: str):
-    return float(data[name]) if name in data.files else None
-
-
-def load_mode_waveform(filename: Path) -> tuple[RelativisticModeWaveform, np.ndarray]:
-    data = np.load(filename)
-    waveform = RelativisticModeWaveform(
-        time=np.asarray(data["time"]),
-        modes=np.asarray(data["modes"]),
-        ell=np.asarray(data["ell"]),
-        m=np.asarray(data["m"]),
-        teukolsky_modes_used=int(data.get("teukolsky_modes_used", 0)),
-        teukolsky_modes_available=int(data.get("teukolsky_modes_available", 0)),
-        retained_power_fraction=float(data.get("retained_power_fraction", 1.0)),
-        trajectory_p=_optional_array(data, "trajectory_p"),
-        trajectory_e=_optional_array(data, "trajectory_e"),
-        trajectory_xI=_optional_array(data, "trajectory_xI"),
-        trajectory_phi_phi=_optional_array(data, "trajectory_phi_phi"),
-        trajectory_phi_r=_optional_array(data, "trajectory_phi_r"),
-        primary_mass=_optional_float(data, "primary_mass"),
-        secondary_mass=_optional_float(data, "secondary_mass"),
-        spin=_optional_float(data, "spin"),
-        model=str(data["model"]) if "model" in data else "FastKerrEccentricEquatorialFlux",
-    )
-    if "h_plus_reference" in data and "h_cross_reference" in data:
-        reference = np.asarray(data["h_plus_reference"]) - 1j * np.asarray(
-            data["h_cross_reference"]
-        )
-    else:
-        reference = waveform.strain(theta=np.pi / 3.0, phi=0.0)
-    return waveform, reference
 
 
 def main(argv: list[str] | None = None) -> int:
