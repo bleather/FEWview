@@ -6,6 +6,7 @@ Needs a working FastEMRIWaveforms CPU backend; skipped otherwise.
 import unittest
 
 import numpy as np
+import pytest
 
 from fewview import generate_relativistic_mode_waveform
 
@@ -19,6 +20,7 @@ def _few_cpu_waveform_model():
         raise unittest.SkipTest(f"FEW CPU backend unavailable: {error}")
 
 
+@pytest.mark.few_data
 class FewWaveformAgreementTest(unittest.TestCase):
     def test_off_equator_strain_matches_few(self):
         """Odd-l modes and their -m partners must reproduce FEW off the equator.

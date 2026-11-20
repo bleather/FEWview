@@ -26,6 +26,10 @@ class PublicApiTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             _resolve_few_model("NotARealFewModel", 10, 55, "cpu")
 
+    def test_rejects_a_waveform_without_radiative_modes(self):
+        with self.assertRaisesRegex(ValueError, "not a mode-resolved"):
+            _resolve_few_model("Pn5AAKWaveform", 10, 55, "cpu")
+
     def test_all_names_are_importable(self):
         for name in fewview.__all__:
             self.assertTrue(hasattr(fewview, name), name)

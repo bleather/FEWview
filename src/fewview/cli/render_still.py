@@ -29,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Generate the fully relativistic FastKerrEccentricEquatorialFlux "
+            "Generate mode-resolved FastEMRIWaveforms "
             "modes, evaluate their spin-weighted full-sky field at retarded "
             "time u=t-r/c, and render a smooth spherical volume."
         )
@@ -37,7 +37,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--backend", default="cpu")
     parser.add_argument("--output-dir", type=Path, default=Path("emri-visualization"))
 
-    source = parser.add_argument_group("equatorial eccentric Kerr EMRI")
+    source = parser.add_argument_group("equatorial EMRI")
+    source.add_argument(
+        "--model", default="FastKerrEccentricEquatorialFlux",
+        choices=("FastKerrEccentricEquatorialFlux", "FastSchwarzschildEccentricFlux", "Circ1PAT1R"),
+    )
+    source.add_argument("--chi2", type=float, default=0.0, help="secondary spin for Circ1PAT1R")
     source.add_argument("--M", type=float, default=1.0e6, help="primary mass [Msun]")
     source.add_argument("--mu", type=float, default=10.0, help="secondary mass [Msun]")
     source.add_argument("--a", type=float, default=0.9, help="dimensionless spin")
@@ -206,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Generating FastKerrEccentricEquatorialFlux modes")
+    logger.info("Generating %s modes", args.model)
     waveform = generate_relativistic_mode_waveform(
         args.M,
         args.mu,
@@ -224,6 +229,8 @@ def main(argv: list[str] | None = None) -> int:
         power_fraction=args.mode_power_fraction,
         max_teukolsky_modes=args.max_teukolsky_modes,
         force_backend=args.backend,
+        model=args.model,
+        chi2=args.chi2,
     )
     logger.info(
         "Reconstructed %d (l,m) modes from %d/%d Teukolsky modes (%.6f power)",

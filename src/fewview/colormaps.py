@@ -1,7 +1,7 @@
 """Colour palettes and opacity profiles.
 
-Fewview accepts any Matplotlib colormap name (``"magma"``, ``"viridis"``,
-``"plasma"``, ``"inferno"``, ``"cividis"``, ``"cool"``, ``"blues"``) plus three
+Fewview accepts these Matplotlib palettes (``"magma"``, ``"viridis"``,
+``"plasma"``, ``"inferno"``, ``"cividis"``, ``"cool"``, ``"blues"``) plus four
 palettes tuned for volume rendering:
 
 ``rainbow``
@@ -11,6 +11,9 @@ palettes tuned for volume rendering:
     A luminous magma variant that lifts weak values off black.
 ``cinematic``
     A cool-to-warm sequence with a bright core.
+
+``ice``
+    A navy-to-white sequence.
 
 The **opacity profile** decides how scalar values map to transparency:
 

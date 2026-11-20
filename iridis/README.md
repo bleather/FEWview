@@ -10,10 +10,9 @@ with Iridis partition/account/module details and a fixed camera shot.
 1. Build the environment on a login node (not in a job):
    ```bash
    module load <your-conda-module>      # `module avail` to find it
-   conda create -n fewview python=3.11
+   conda create -n fewview python=3.12
    conda activate fewview
-   # install your FastEMRIWaveforms build, then:
-   pip install fewview
+   python -m pip install "git+https://github.com/bleather/FEWview.git"
    ```
 2. Copy across the mode file written locally by `fewview-render`:
    ```bash

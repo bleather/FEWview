@@ -1,224 +1,68 @@
-# Fewview
+# FEWview
 
-Full-sky volume visualizations for [FastEMRIWaveforms
-(FEW)](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms) EMRI
-waveforms.
+FEWview renders the gravitational waves from an extreme mass-ratio inspiral.
+It takes the radiative modes from FastEMRIWaveforms (FEW) and evaluates the
+strain in every direction around the binary. Radius measures look-back time.
+In a still, a crest near the edge left the source earlier than one near the centre.
 
-Fewview turns a FEW waveform into a spherical, retarded-time picture of the
-gravitational wave. The fully relativistic `FastKerrEccentricEquatorialFlux`
-modes are reconstructed into `h_lm(t)`, combined with spin-weighted spherical
-harmonics over the whole sky, and evaluated at `u = t_frame - r / c` throughout
-a sphere, so a still or movie shows the wave propagating outward from the
-source.
-
-## Gallery
-
-A few stills produced with Fewview, across colour palettes and camera views.
-
-<table>
-  <tr>
-    <td><img src="docs/images/gallery-magma-oblique.png" alt="magma, oblique view" width="100%"></td>
-    <td><img src="docs/images/gallery-rainbow-oblique.png" alt="rainbow, oblique view" width="100%"></td>
-  </tr>
-  <tr>
-    <td align="center"><code>magma</code>, oblique</td>
-    <td align="center"><code>rainbow</code>, oblique</td>
-  </tr>
-  <tr>
-    <td><img src="docs/images/gallery-cool-faceon.png" alt="cool, face-on view" width="100%"></td>
-    <td><img src="docs/images/gallery-plasma-oblique.png" alt="plasma, oblique view" width="100%"></td>
-  </tr>
-  <tr>
-    <td align="center"><code>cool</code>, face-on</td>
-    <td align="center"><code>plasma</code>, oblique</td>
-  </tr>
-  <tr>
-    <td><img src="docs/images/gallery-plasma-faceon.png" alt="plasma, face-on view" width="100%"></td>
-    <td><img src="docs/images/gallery-magma-faceon.png" alt="magma, face-on view" width="100%"></td>
-  </tr>
-  <tr>
-    <td align="center"><code>plasma</code>, face-on</td>
-    <td align="center"><code>magma</code>, face-on</td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="docs/images/gallery-flux-plasma.png" alt="energy flux, oblique view" width="50%"></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center">energy flux (<code>energy_flux</code> + <code>flux</code> profile), oblique — the bright polar flux lobes with the equatorial null showing through</td>
-  </tr>
-</table>
+![Oblique view of an eccentric Kerr inspiral, showing successive wavefronts in the plus polarisation](https://raw.githubusercontent.com/bleather/FEWview/main/docs/images/gallery-magma-oblique.png)
 
 ## Installation
 
-Fewview reads FEW models directly, so install it into the **same environment**
-as your existing FastEMRIWaveforms installation:
+Use Python 3.12 or later. On macOS, FEW supplies wheels for Apple Silicon
+(macOS 14 or later). Use a native arm64 Python environment there. From a checkout, run
 
 ```bash
-pip install -e .
+python -m pip install .
 ```
 
-`few` is expected to already be importable; it is not installed as a dependency
-so that Fewview does not disturb a working FEW build.
+To install directly from GitHub, run
 
-## Documentation
-
-- [Tutorial](docs/tutorial.md) — render a still and a movie, step by step
-  (executable version: [`examples/tutorial.ipynb`](examples/tutorial.ipynb))
-- [Cluster rendering](docs/cluster_rendering.md) — distributed movies on Slurm
-
-## Quick start
-
-```python
-import numpy as np
-from fewview import (
-    generate_relativistic_mode_waveform,
-    choose_max_delay,
-    render_mode_frame,
-)
-
-wf = generate_relativistic_mode_waveform(
-    M=1e6, mu=10.0, a=0.9, p0=12.0, e0=0.4, xI0=1.0,
-    dt=10.0, T=0.01, lmax=10, nmax=55,
-)
-ref = wf.strain(theta=np.pi / 3.0, phi=0.0)
-max_delay = choose_max_delay(wf.time, np.real(ref), -np.imag(ref))
-
-render_mode_frame(
-    wf,
-    screenshot="emri.png",
-    max_delay=max_delay,
-    frame_time=wf.time[-1],
-    waveform_start_time=wf.time[0],
-    waveform_end_time=wf.time[-1],
-    component="plus",
-    opacity_profile="shells",
-    color_scheme="rainbow",
-    presentation="shells_dramatic",
-)
+```bash
+python -m pip install "git+https://github.com/bleather/FEWview.git"
 ```
 
-For a movie, use `render_mode_animation` with the same arguments plus a
-`start_time`/`end_time` range and `frames`/`fps`.
+Pip installs the public CPU build of FEW 2.2.x. FEW downloads the data for each model
+on first use. The default eccentric Kerr model needs about 5 GB for its
+amplitude table. The circular example below uses a few MB.
 
-## Waveform models
+## Render a waveform
 
-By default the waveform comes from FEW's `FastKerrEccentricEquatorialFlux`. The
-`model` argument selects any mode-resolved FEW model, by class name or as an
-already-instantiated model object:
+This example follows a ten-solar-mass secondary on a circular orbit around a
+million-solar-mass primary. It uses the post-adiabatic `Circ1PAT1R` model.
 
-```python
-# a different flux model
-wf = generate_relativistic_mode_waveform(
-    M=1e6, mu=10.0, a=0.0, p0=12.0, e0=0.4, xI0=1.0,
-    dt=10.0, T=0.01, model="FastSchwarzschildEccentricFlux",
-)
-
-# the post-adiabatic circular model (needs a FEW build that provides it)
-wf = generate_relativistic_mode_waveform(
-    M=1e6, mu=10.0, a=0.5, p0=10.0, e0=0.0, xI0=1.0,
-    dt=10.0, T=0.02, model="Waveform1PAT1R",
-)
+```bash
+fewview-render --model Circ1PAT1R --M 1e6 --mu 10 --a 0.00001 \
+  --p0 10 --e0 0 --chi2 0.3 --T 0.0002 --dt 10 \
+  --grid-resolution 64 --opacity-profile shells --output-dir circular
 ```
 
-The flux family and the post-adiabatic `Waveform1PAT1R` (a circular model that
-evolves the primary's mass and spin) are both supported; Fewview reconstructs
-the same modes those models produce (validated at >99% overlap against
-`Waveform1PAT1R`'s own output). Install Fewview into the same environment as the
-FEW build that provides the model you want.
+Open `circular/relativistic-emri-volume.png` for the still or
+`circular/relativistic-volume-slice.png` for a cut through the orbital axis.
+The same run saves the modes, so you can change the camera or make a movie
+without generating the inspiral again.
 
-## Appearance
+```bash
+fewview-animate circular/relativistic-modes.npz --output circular/orbit.mp4 \
+  --frames 48 --fps 24 --animation-cycles 2 --grid-resolution 64
+```
 
-Three knobs control the look.
+For an eccentric Kerr inspiral, `fewview-render --output-dir kerr` uses
+`FastKerrEccentricEquatorialFlux` with spin 0.9 and initial eccentricity 0.4.
+The tutorial works through this case in Python, including the choice of
+retarded-time window, polarisation and viewing angle.
 
-**Component** — what scalar field is rendered:
-
-| `component` | meaning | notes |
-| --- | --- | --- |
-| `plus` | plus polarization | no equatorial node; the usual choice |
-| `cross` | cross polarization | zero on the equatorial plane by symmetry |
-| `amplitude` | \|h\| | basis-independent, smooth everywhere |
-| `energy_flux` | \|dh/dt\|² | pair with the `flux` opacity profile |
-
-**Opacity profile** — how values map to transparency: `soft` (broad fronts,
-the default), `bands` (symmetric levels), `shells` (nested translucent
-signed-strain sheets; needs `plus`/`cross`), `flux` (threshold-gated
-energy-flux shells that keep the dim troughs transparent; needs `energy_flux`,
-and reads best with `presentation="shells_dramatic"`). The `flux` look is tuned
-with `flux_threshold` (how bright a crest must be to become solid) and
-`flux_gamma` (how much the dim inter-crest flux is lifted).
-
-**Colour scheme** — any Matplotlib colormap (`magma`, `viridis`, `plasma`,
-`inferno`, `cividis`, `cool`, `blues`) plus three tuned palettes: `rainbow`,
-`aurora`, `cinematic`. `fewview.colormaps.available_color_schemes()` lists
-them all.
-
-**Camera** — `camera_view` picks the `oblique` or `face_on` preset and
-`camera_zoom` frames the sphere. For a specific angle, set an absolute
-`camera_latitude` (degrees above the equatorial plane) and `camera_longitude`
-(azimuth from `+x`); `camera_azimuth`/`camera_elevation` instead nudge the
-preset by a relative offset. In `render_mode_animation` the camera can fly:
-give `camera_latitude_end`/`camera_longitude_end` and it travels there by the
-final frame, or set `camera_loop=True` to circle a full 360° and rise to a peak
-latitude then settle back on the opening view (with `camera_orbit_degrees` as
-the older pure-azimuth sweep). The `show_waveform` strain panel is composited
-over the scene by default (`waveform_transparent=True`) so the background shows
-through it; pass `waveform_transparent=False` for the older opaque strip.
-
-## API layout
-
-The public API is re-exported from the top-level `fewview` package and grouped
-into topical submodules:
-
-- `fewview.waveform` — `generate_relativistic_mode_waveform`,
-  `RelativisticModeWaveform`, `estimate_waveform_period`, `choose_max_delay`,
-  `polarizations_from_complex`
-- `fewview.volume` — `build_mode_retarded_time_volume`,
-  `RetardedTimeVolume`, `to_pyvista`, `save_volume`
-- `fewview.rendering` — `render_volume`, `render_mode_frame`,
-  `render_mode_animation`
-- `fewview.surface` — `StrainSurface`, `build_strain_surface`,
-  `plot_strain_surface`
-- `fewview.plotting` — `plot_volume_slice`
-- `fewview.colormaps` — palette and profile listings
-
-## Command-line tools
-
-Installing the package provides console scripts:
-
-| command | purpose |
-| --- | --- |
-| `fewview-render` | render a single still from waveform parameters |
-| `fewview-animate` | render a movie from a saved `relativistic-modes.npz` |
-| `fewview-cluster-job` | generate a Slurm array job for a cluster render |
-| `fewview-cluster-segment` | render one segment of a distributed movie |
-| `fewview-cluster-merge` | concatenate rendered segments into the final movie |
-
-See [`docs/cluster_rendering.md`](docs/cluster_rendering.md) for the cluster
-workflow.
-
-## Notes on the physics of the picture
-
-- **The polar axis** carries an unavoidable seam: a spin-2 field cannot be
-  combed continuously over the poles, so any scalar rendering of `plus`/`cross`
-  is multivalued there. It is faint in oblique views and washes out under
-  smoothing, but it is inherent to the representation, not a bug.
-- **The amplitude model is capped at `nmax=55`.** Requesting a larger `nmax`
-  emits a warning and uses the model's trained set; at high eccentricity the
-  render will therefore be missing some high-overtone content.
+[Python tutorial](https://github.com/bleather/FEWview/blob/main/docs/tutorial.md) ·
+[Example notebook](https://github.com/bleather/FEWview/blob/main/examples/tutorial.ipynb) ·
+[Model and API guide](https://github.com/bleather/FEWview/blob/main/docs/reference.md) ·
+[Rendering on Slurm](https://github.com/bleather/FEWview/blob/main/docs/cluster_rendering.md)
 
 ## Acknowledgements
 
-Fewview's volume-rendering approach is inspired by two codes that pioneered this
-style of visualization for numerical relativity simulations:
+The outgoing-wave visualisation follows the approach used for numerical
+relativity waveforms in gwpv (Nils Vu) and ROSE. FEW supplies the inspiral
+trajectories and amplitudes. If you use these figures in a paper, please cite
+FEW and the waveform model you used. [gwpv](https://github.com/nilsvu/gwpv) ·
+[FEW and its citations](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms#citation)
 
-- [**gwpv**](https://github.com/nilsvu/gwpv) by Nils Vu, a ParaView-based
-  renderer for gravitational waves from numerical relativity.
-- **ROSE**, which renders the radiated field of numerical relativity
-  simulations as an outgoing volume.
-
-Fewview adapts that idea to the mode-resolved EMRI waveforms produced by
-[FastEMRIWaveforms](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms).
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+FEWview is released under the [MIT licence](https://github.com/bleather/FEWview/blob/main/LICENSE).
