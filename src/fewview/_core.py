@@ -214,8 +214,11 @@ class RelativisticModeWaveform:
 
     ``modes[:, k]`` is :math:`h_{\ell m}(t)` before multiplication by
     :math:`{}_{-2}Y_{\ell m}(\theta,\phi)`.  Radial harmonics ``n`` have already
-    been summed, and both positive and negative ``m`` modes are present using
-    the same parity convention as :class:`few.utils.ylm.GetYlms`.
+    been summed, and both positive and negative ``m`` modes are present.  The
+    negative-``m`` columns hold the true :math:`h_{\ell,-m}=(-1)^\ell
+    h_{\ell m}^*`, so every column pairs with the standard harmonic from
+    :class:`few.utils.ylm.GetYlms` (FEW's summation instead folds the
+    :math:`(-1)^\ell` into :math:`Y_{\ell,-m}`).
     """
 
     time: np.ndarray
@@ -584,7 +587,9 @@ def generate_relativistic_mode_waveform(
             m_here = int(m_all[global_index])
             modes[:, lm_index[(ell_here, m_here)]] += positive_modes[:, local_index]
             if m_here > 0:
-                modes[:, lm_index[(ell_here, -m_here)]] += np.conj(
+                # Equatorial reflection symmetry: h_{l,-m} = (-1)^l conj(h_{lm}).
+                # FEW's mode sums apply the same (-1)^l to Y_{l,-m}.
+                modes[:, lm_index[(ell_here, -m_here)]] += (-1.0) ** ell_here * np.conj(
                     positive_modes[:, local_index]
                 )
 

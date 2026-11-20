@@ -763,6 +763,35 @@ class PostAdiabaticBranchTest(unittest.TestCase):
         # Trajectory should be populated
         self.assertTrue(waveform.has_trajectory)
 
+    @patch("fewview._core._resolve_few_model")
+    def test_negative_m_partner_carries_minus_one_to_the_l(self, mock_resolve):
+        """h_{l,-m} = (-1)^l conj(h_{lm}): odd-l partners flip sign."""
+
+        mock_generator = self._build_mock_generator()
+        amp_gen = mock_generator.amplitude_generator
+        amp_gen.l_arr_no_mask = np.array([2, 3])
+        amp_gen.m_arr_no_mask = np.array([2, 2])
+        mock_resolve.return_value = mock_generator
+
+        constants_mock = MagicMock()
+        constants_mock.Gpc = 3.086e25
+        constants_mock.MRSUN_SI = 1477.0
+
+        with patch.dict("sys.modules", {"few.utils.constants": constants_mock}):
+            waveform = generate_relativistic_mode_waveform(
+                M=1e6, mu=10.0, a=0.9, p0=10.0, e0=0.0, T=0.001, dt=10.0,
+                model="Waveform1PAT1R", dist=None,
+            )
+
+        column = {
+            (int(l), int(m)): k for k, (l, m) in enumerate(zip(waveform.ell, waveform.m))
+        }
+        for ell in (2, 3):
+            np.testing.assert_allclose(
+                waveform.modes[:, column[(ell, -2)]],
+                (-1.0) ** ell * np.conj(waveform.modes[:, column[(ell, 2)]]),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
