@@ -55,6 +55,23 @@ class ClusterCameraFlagTests(unittest.TestCase):
         self.assertFalse(seg.camera_loop)
         self.assertTrue(seg.waveform_transparent)  # transparent panel by default
 
+    def test_glow_has_its_own_cache_and_reaches_the_worker(self):
+        classic = self._job_args([])
+        glow = self._job_args(["--source-glow"])
+        modes = Path("modes.npz")
+        file_stat = Path(__file__).stat()
+        keys = cluster_job.RENDER_KEYS
+        legacy_keys = tuple(key for key in keys if key != "source_glow")
+        fingerprint = cluster_job._run_fingerprint
+        default_id = fingerprint(classic, keys, modes, file_stat)
+        self.assertEqual(default_id, fingerprint(classic, legacy_keys, modes, file_stat))
+        self.assertNotEqual(default_id, fingerprint(glow, keys, modes, file_stat))
+        worker = cluster_job._worker_arguments(glow, modes, Path("segs"))
+        segment = cluster_segment.build_parser().parse_args(
+            worker + ["--segment-index", "0"]
+        )
+        self.assertTrue(segment.source_glow)
+
     def test_camera_flight_settings_change_the_run_fingerprint(self):
         # Different camera options must produce a different run fingerprint,
         # so re-runs do not reuse another shot's completed segments.

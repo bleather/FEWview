@@ -496,7 +496,6 @@ def _worker_arguments(
         args.waveform_font_style,
         "--bodies" if args.bodies else "--no-bodies",
         "--trajectory" if args.trajectory else "--no-trajectory",
-        "--source-glow" if args.source_glow else "--no-source-glow",
         "--trajectory-tube" if args.trajectory_tube else "--no-trajectory-tube",
         "--waveform-panel" if args.waveform_panel else "--no-waveform-panel",
         "--camera-loop" if args.camera_loop else "--no-camera-loop",
@@ -504,6 +503,8 @@ def _worker_arguments(
         if args.waveform_transparent
         else "--no-waveform-transparent",
     ]
+    if args.source_glow:
+        values.append("--source-glow")
     if args.starfield is not None:
         values.append("--starfield" if args.starfield else "--no-starfield")
     if args.waveform_style_file is not None:
@@ -532,6 +533,9 @@ def _worker_arguments(
 
 def _run_fingerprint(args, render_keys, modes, mode_stat):
     """Return a short hash identifying the render configuration."""
+    # Classic runs can resume segments rendered before source glow was added.
+    if not args.source_glow:
+        render_keys = tuple(key for key in render_keys if key != "source_glow")
     fingerprint_source = repr(
         (
             str(modes),
