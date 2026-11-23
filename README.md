@@ -38,7 +38,7 @@ on first use. The default eccentric Kerr model needs about 5 GB for its
 amplitude table. The circular example below uses a few MB.
 
 On a headless Ubuntu machine, install the
-[Mesa rendering libraries](https://github.com/bleather/FEWview/blob/main/docs/index.md#first-render)
+[Mesa rendering libraries](https://fewview.readthedocs.io/en/latest/#first-render)
 before making a 3D still or movie.
 
 ## Render a waveform
@@ -70,10 +70,10 @@ For an eccentric Kerr inspiral, `fewview-render --output-dir kerr` uses
 The tutorial works through this case in Python, including the choice of
 retarded-time window, polarisation and viewing angle.
 
-[Python tutorial](https://github.com/bleather/FEWview/blob/main/docs/tutorial.md) ·
+[Python tutorial](https://fewview.readthedocs.io/en/latest/tutorial.html) ·
 [Example notebook](https://github.com/bleather/FEWview/blob/main/examples/tutorial.ipynb) ·
-[Model and API guide](https://github.com/bleather/FEWview/blob/main/docs/reference.md) ·
-[Rendering on Slurm](https://github.com/bleather/FEWview/blob/main/docs/cluster_rendering.md)
+[Model and API guide](https://fewview.readthedocs.io/en/latest/reference.html) ·
+[Rendering on Slurm](https://fewview.readthedocs.io/en/latest/cluster_rendering.html)
 
 Figures and movies carry the FEWview wordmark in the lower-right corner.
 Use `--logo icon` (or `logo="icon"` in Python) for the orbit symbol alone.

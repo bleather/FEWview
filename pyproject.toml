@@ -46,7 +46,7 @@ docs = ["mkdocs>=1.6,<2"]
 [project.urls]
 Homepage = "https://github.com/bleather/FEWview"
 Issues = "https://github.com/bleather/FEWview/issues"
-Documentation = "https://github.com/bleather/FEWview/blob/main/docs/index.md"
+Documentation = "https://fewview.readthedocs.io/en/latest/"
 
 [project.scripts]
 fewview-render = "fewview.cli.render_still:main"

@@ -1,0 +1,55 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published GitHub release tag (e.g. v0.2.0)
+        required: true
+        type: string
+
+concurrency:
+  group: pypi-${{ inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      (github.event_name == 'release' && !github.event.release.prerelease) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/fewview/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download the tested wheel and source archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          curl --fail --silent --show-error -H "Authorization: Bearer $GH_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/tags/$TAG" -o release.json
+          jq -e --arg tag "$TAG" '.tag_name == $tag and (.draft or .prerelease | not)' release.json
+
+          version=${TAG#v}
+          wheel="fewview-$version-py3-none-any.whl"
+          sdist="fewview-$version.tar.gz"
+          mkdir dist
+          for file in "$wheel" "$sdist"; do
+            digest=$(jq -er --arg file "$file" '.assets[] | select(.name == $file) | .digest' release.json)
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            curl --fail --silent --show-error --location --retry 3 \
+              "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/$file" -o "dist/$file"
+            echo "${digest#sha256:}  dist/$file" | sha256sum -c -
+          done
+      - name: Publish the distributions
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
