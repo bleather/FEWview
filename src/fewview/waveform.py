@@ -1,6 +1,6 @@
 """Waveform generation and mode reconstruction.
 
-This module produces the mode-resolved, full-sky waveform that every Fewview
+This module produces the mode-resolved, full-sky waveform that every FEWview
 visualization is built from. :func:`generate_relativistic_mode_waveform` runs
 the fully relativistic ``FastKerrEccentricEquatorialFlux`` model and returns a
 :class:`RelativisticModeWaveform`, which carries the individual

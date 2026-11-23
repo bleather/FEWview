@@ -19,13 +19,15 @@ along that line of sight. The shaded interval is the cycle pictured above.
 ## Installation
 
 Use Python 3.12 or later. On macOS, FEW supplies wheels for Apple Silicon
-(macOS 14 or later). Use a native arm64 Python environment there. From a checkout, run
+(macOS 14 or later). Use a native arm64 Python environment there.
+To install the current GitHub release, run
 
 ```bash
-python -m pip install .
+python -m pip install https://github.com/bleather/FEWview/releases/download/v0.2.0/fewview-0.2.0-py3-none-any.whl
 ```
 
-To install directly from GitHub, run
+For the development version, run the following command or use
+`python -m pip install .` from a local checkout.
 
 ```bash
 python -m pip install "git+https://github.com/bleather/FEWview.git"

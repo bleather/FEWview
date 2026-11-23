@@ -128,7 +128,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="soft",
         help=(
             "soft uses broad fronts; bands uses symmetric scalar levels; "
-            "shells exposes positive signed-strain bands; flux uses log flux"
+            "shells displays positive strain bands and flux displays gamma-scaled energy flux"
         ),
     )
     display.add_argument(
@@ -336,7 +336,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.show:
         plt.show()
     else:
-        plt.close("all")
+        plt.close(slice_figure)
     return 0
 
 

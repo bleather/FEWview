@@ -107,7 +107,7 @@ fv.render_mode_frame(
 
 ## 5. A different field: energy flux
 
-The looks above render the strain (`component="plus"`), but Fewview can also
+The looks above render the strain (`component="plus"`), but FEWview can also
 show the outgoing energy flux `|dh/dt|²`. Pair `component="energy_flux"` with
 `opacity_profile="flux"`: the profile keeps the dim troughs between wavefronts
 transparent and lets only the bright crests turn solid, so the flux reads as a

@@ -1,4 +1,4 @@
-"""Command-line entry points for Fewview."""
+"""Command-line entry points for FEWview."""
 
 # Segments from older layouts must be rendered again before they can be resumed.
 SEGMENT_RENDER_VERSION = "corner-logo-v1"

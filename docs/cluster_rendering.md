@@ -14,7 +14,7 @@ appears.
 
 ## What you need on the cluster
 
-1. **Fewview installed in an environment on the cluster**, alongside your
+1. **FEWview installed in an environment on the cluster**, alongside your
    FastEMRIWaveforms install (see below).
 2. **The `relativistic-modes.npz` file** written by `fewview-render`. It already contains the waveform modes
    and trajectory, so nothing else needs to be transferred.
@@ -30,7 +30,7 @@ cluster and must not be copied; create the environment on the cluster instead.
 
 ## Create the environment
 
-Fewview renders from a saved mode file and does not need the FEW CUDA backend,
+FEWview renders from a saved mode file and does not need the FEW CUDA backend,
 so a CPU FEW install is enough. Build the environment on a login node, not in a
 render job. A conda environment is convenient:
 
@@ -83,6 +83,8 @@ Add `--preemptible` if that partition can preempt jobs: it adds
 marker, a requeued task skips the segments it already rendered.
 Use the same `--logo` setting for every segment. Regenerate segments from older
 versions before merging them into a new movie.
+If you pass `--waveform-style-file`, the job generator saves a copy for its
+workers. Regenerate the job after editing the style to render a new set of segments.
 
 For a fuller flux (energy-flux) movie instead of signed strain, add:
 
@@ -127,17 +129,17 @@ The finished movie is written to `fewview-render-job/relativistic-emri-animation
 
 ## Sizing the job
 
-The render is CPU-bound and single-threaded per task, so the GPU sits nearly
-idle and extra `--cpus-per-task` does not help. Two levers matter:
+Each task renders its frames in sequence. Numba and the numerical libraries can
+use the cores allocated with `--cpus-per-task`. VTK uses the graphics backend
+reported in the render log. Time a short run on your node before choosing how
+many cores and GPUs to request.
 
 - **`--segments`** splits the frames into contiguous chunks, one per task. More
   segments means less work per task and less chance of hitting the `--time`
   limit. Keep at least a few dozen frames per segment so the per-task setup cost
   amortizes.
-- **`--max-concurrent`** caps how many tasks run at once. Since each task is
-  light (one barely-used GPU, ~12-20 GB host memory at `--resolution 300`),
-  raise this as high as your queue allows to cut wall-clock time; the total work
-  is fixed, so wall time is roughly `total / concurrent`.
+- **`--max-concurrent`** caps how many tasks run at once. Each running task
+  requests its own GPU and host memory. Choose a cap that fits your allocation.
 
 `--resolution` drives cost as the cube: 400 is ~2.4x the work of 300 and needs
 correspondingly more memory (`--memory`). Do a short throwaway run

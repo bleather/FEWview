@@ -9,7 +9,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE", "docs/img/DM-Sans-OFL.txt"]
-authors = [{ name = "Ben Leather" }]
+authors = [{ name = "Benjamin Leather" }]
 keywords = [
     "gravitational-waves",
     "EMRI",

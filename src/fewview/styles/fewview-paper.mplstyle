@@ -1,4 +1,4 @@
-# Fewview paper style: a LaTeX (Computer Modern) look for publication figures.
+# FEWview paper style: a LaTeX (Computer Modern) look for publication figures.
 # Uses Matplotlib's bundled cmr10 font and cm mathtext, so it needs no LaTeX
 # installation (text.usetex stays off). Applied by fewview's Matplotlib plots
 # and available to your own via fewview.paper_style_file().

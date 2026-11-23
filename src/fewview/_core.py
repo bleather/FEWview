@@ -105,9 +105,9 @@ def _resolve_opacity(opacity, opacity_profile):
 
 
 def paper_style_file() -> str:
-    """Return the path to Fewview's bundled LaTeX (Computer Modern) mplstyle.
+    """Return the path to FEWview's bundled LaTeX (Computer Modern) mplstyle.
 
-    Fewview's Matplotlib figures use it by default. Apply it to your own plots
+    FEWview's Matplotlib figures use it by default. Apply it to your own plots
     for a matching look::
 
         import matplotlib.pyplot as plt
@@ -1356,7 +1356,7 @@ def plot_strain_surface(
 ):
     """Plot a :class:`StrainSurface` with Matplotlib.
 
-    When Fewview creates the figure (``ax`` is ``None``) it applies the bundled
+    When FEWview creates the figure (``ax`` is ``None``) it applies the bundled
     LaTeX paper style; pass your own ``ax`` to keep your figure's styling.
 
     Returns:
@@ -1438,7 +1438,7 @@ def plot_volume_slice(
 ):
     """Plot a central slice through a retarded-time volume with Matplotlib.
 
-    When Fewview creates the figure (``ax`` is ``None``) it applies the bundled
+    When FEWview creates the figure (``ax`` is ``None``) it applies the bundled
     LaTeX paper style; pass your own ``ax`` to keep your figure's styling.
     """
 
@@ -1786,7 +1786,7 @@ def render_volume(
             for the former diagnostic isosurface view.
         opacity_profile: ``"soft"`` or ``"bands"`` for the generic mappings,
             ``"shells"`` for positive signed-strain bands, or ``"flux"`` for a
-            logarithmically compressed energy-flux volume.
+            gamma-scaled energy-flux volume.
         color_scheme: Magma-based or alternative Matplotlib colour palette.
         presentation: ``"balanced"`` preserves the restrained scientific
             styling; ``"dramatic"`` adds magma-oriented glow;
@@ -2982,6 +2982,10 @@ def render_mode_animation(
         raise ValueError("frames must be at least 2")
     if fps < 1:
         raise ValueError("fps must be positive")
+    if camera_latitude_end is not None and not -90 <= float(camera_latitude_end) <= 90:
+        raise ValueError("camera_latitude_end must be in the interval [-90, 90]")
+    if camera_zoom_end is not None and not 0 < float(camera_zoom_end) < np.inf:
+        raise ValueError("camera_zoom_end must be finite and positive")
     if image_scale < 1:
         raise ValueError("image_scale must be at least 1")
     opacity = _resolve_opacity(opacity, opacity_profile)
@@ -3249,8 +3253,6 @@ def render_mode_animation(
         if camera_longitude_end is None
         else float(camera_longitude_end)
     )
-    if abs(latitude_target) > 90.0:
-        raise ValueError("camera_latitude_end must be in the interval [-90, 90]")
     fly_camera = (
         latitude_target != camera_latitude_start
         or longitude_target != camera_longitude_start
@@ -3260,9 +3262,6 @@ def render_mode_animation(
     # across the global interval, and set the view angle directly each frame so
     # it does not compound. Larger zoom = closer/more magnified.
     zoom_start = float(resolved_presentation.camera_zoom)
-    if camera_zoom_end is not None and float(camera_zoom_end) <= 0.0:
-        plotter.close()
-        raise ValueError("camera_zoom_end must be positive")
     zoom_target = zoom_start if camera_zoom_end is None else float(camera_zoom_end)
     animate_zoom = zoom_target != zoom_start
     render_array = grid.point_data[render_name]

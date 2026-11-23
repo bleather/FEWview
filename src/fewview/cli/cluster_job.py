@@ -10,6 +10,7 @@ import stat
 import sys
 import textwrap
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from fewview import available_color_schemes
 from fewview.cli import SEGMENT_RENDER_VERSION, add_logo_argument
@@ -534,7 +535,7 @@ def _worker_arguments(
     return values
 
 
-def _run_fingerprint(args, render_keys, modes, mode_stat):
+def _run_fingerprint(args, render_keys, modes, mode_stat, style_bytes=None):
     """Return a short hash identifying the render configuration."""
     # Omit disabled glow flags so renders from before each option can resume.
     render_keys = tuple(
@@ -550,7 +551,10 @@ def _run_fingerprint(args, render_keys, modes, mode_stat):
             tuple((key, getattr(args, key)) for key in render_keys),
         )
     )
-    return hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha256(fingerprint_source.encode("utf-8"))
+    if style_bytes is not None:
+        digest.update(style_bytes)
+    return digest.hexdigest()[:12]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -570,7 +574,7 @@ def main(argv: list[str] | None = None) -> int:
     venv = None if args.conda_env else _resolve(project, args.venv)
     if args.waveform_style_file is not None:
         args.waveform_style_file = _resolve(project, args.waveform_style_file)
-    # The render and merge steps are Fewview console scripts, resolved from the
+    # The render and merge steps are FEWview console scripts, resolved from the
     # activated environment's PATH rather than from a source checkout.
     worker = "fewview-cluster-segment"
     merger = "fewview-cluster-merge"
@@ -578,8 +582,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.waveform_style_file is not None:
         required_paths.append(args.waveform_style_file)
     for required in required_paths:
-        if not required.exists():
-            raise SystemExit(f"Required path does not exist: {required}")
+        if not required.is_file():
+            raise SystemExit(f"Expected a file at {required}")
     if args.frames < 2 * args.segments:
         raise SystemExit(
             f"Use at least two frames per segment: {args.frames} frames at "
@@ -593,11 +597,19 @@ def main(argv: list[str] | None = None) -> int:
         args.max_concurrent or DEFAULT_CONCURRENCY,
     )
     mode_stat = modes.stat()
-    run_id = _run_fingerprint(args, RENDER_KEYS, modes, mode_stat)
+    style_bytes = args.waveform_style_file.read_bytes() if args.waveform_style_file else None
+    run_id = _run_fingerprint(args, RENDER_KEYS, modes, mode_stat, style_bytes)
     logs_dir = job_dir / "logs"
     segments_dir = job_dir / "segments" / run_id
     logs_dir.mkdir(parents=True, exist_ok=True)
     segments_dir.mkdir(parents=True, exist_ok=True)
+    if style_bytes is not None:
+        # Queued and requeued workers must all read the style used for this run ID.
+        args.waveform_style_file = segments_dir / "waveform.mplstyle"
+        with TemporaryDirectory(dir=segments_dir) as staging:
+            style = Path(staging) / "waveform.mplstyle"
+            style.write_bytes(style_bytes)
+            style.replace(args.waveform_style_file)
     output = job_dir / args.output_name
 
     module_lines = _module_lines(args.module)

@@ -7,6 +7,7 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from fewview.cli import SEGMENT_RENDER_VERSION
 
@@ -58,30 +59,22 @@ def main(argv: list[str] | None = None) -> int:
     import imageio_ffmpeg
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    manifest = args.segments_dir / "segments.ffconcat"
-    manifest.write_text(
-        "ffconcat version 1.0\n"
-        + "".join(
-            f"file '{_ffmpeg_concat_path(path)}'\n" for path in segment_files
-        ),
-        encoding="utf-8",
-    )
-    command = [
-        imageio_ffmpeg.get_ffmpeg_exe(),
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        str(manifest),
-        "-c",
-        "copy",
-        "-movflags",
-        "+faststart",
-        str(args.output),
-    ]
-    subprocess.run(command, check=True)
+    if args.output.resolve() in {path.resolve() for path in (*segment_files, *marker_files)}:
+        raise SystemExit("Choose an output path separate from the segment files and markers.")
+    with TemporaryDirectory(dir=args.output.parent) as staging:
+        movie = Path(staging) / ("movie" + args.output.suffix)
+        manifest = Path(staging) / "segments.ffconcat"
+        manifest.write_text(
+            "ffconcat version 1.0\n"
+            + "".join(f"file '{_ffmpeg_concat_path(path)}'\n" for path in segment_files),
+            encoding="utf-8",
+        )
+        subprocess.run([
+            imageio_ffmpeg.get_ffmpeg_exe(),
+            "-f", "concat", "-safe", "0", "-i", str(manifest),
+            "-c", "copy", "-movflags", "+faststart", str(movie),
+        ], check=True)
+        movie.replace(args.output)
     sys.stdout.write(f"{args.output.resolve()}\n")
     return 0
 

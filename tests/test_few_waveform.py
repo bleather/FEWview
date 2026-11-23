@@ -1,6 +1,6 @@
 """End-to-end check of the reconstructed modes against FEW's own waveform.
 
-Needs a working FastEMRIWaveforms CPU backend; skipped otherwise.
+Run with the opt-in few_data tests and a working FEW CPU backend.
 """
 
 import unittest
@@ -9,15 +9,6 @@ import numpy as np
 import pytest
 
 from fewview import generate_relativistic_mode_waveform
-
-
-def _few_cpu_waveform_model():
-    try:
-        from few.waveform import FastKerrEccentricEquatorialFlux
-
-        return FastKerrEccentricEquatorialFlux(lmax=10, nmax=55, force_backend="cpu")
-    except Exception as error:  # missing FEW, backend or data files
-        raise unittest.SkipTest(f"FEW CPU backend unavailable: {error}")
 
 
 @pytest.mark.few_data
@@ -30,8 +21,9 @@ class FewWaveformAgreementTest(unittest.TestCase):
         """
 
         from few.utils.ylm import GetYlms
+        from few.waveform import FastKerrEccentricEquatorialFlux
 
-        generator = _few_cpu_waveform_model()
+        generator = FastKerrEccentricEquatorialFlux(lmax=10, nmax=55, force_backend="cpu")
         M, mu, a, p0, e0, dt, T = 1e6, 10.0, 0.9, 10.0, 0.3, 10.0, 0.002
         theta, phi = np.pi / 3.0, 0.7
 
@@ -50,10 +42,8 @@ class FewWaveformAgreementTest(unittest.TestCase):
         )
         strain = waveform.modes @ harmonics
 
-        n = min(reference.size, strain.size)
-        mismatch = np.linalg.norm(reference[:n] - strain[:n]) / np.linalg.norm(
-            reference[:n]
-        )
+        self.assertEqual(strain.shape, reference.shape)
+        mismatch = np.linalg.norm(reference - strain) / np.linalg.norm(reference)
         self.assertLess(mismatch, 1e-10)
 
 

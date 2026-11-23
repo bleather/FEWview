@@ -10,10 +10,13 @@ The orbit drawn in the centre has a separate display scale.
 
 ## First render
 
-In a Python 3.12 or later environment, install from a checkout with
-`python -m pip install .`. To install without cloning the repository yourself,
-use `python -m pip install "git+https://github.com/bleather/FEWview.git"`.
-You can also pass the path to a release wheel directly to pip.
+In a Python 3.12 or later environment, install the GitHub release with
+
+```bash
+python -m pip install https://github.com/bleather/FEWview/releases/download/v0.2.0/fewview-0.2.0-py3-none-any.whl
+```
+
+For the development version, run `python -m pip install .` from a checkout.
 On macOS use a native arm64 Python on macOS 14 or later, the platform covered
 by the [public FEW wheels](https://pypi.org/project/fastemriwaveforms/#files).
 On a headless Ubuntu machine, install Mesa's software renderer before making

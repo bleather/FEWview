@@ -1,6 +1,6 @@
 """Colour palettes and opacity profiles.
 
-Fewview accepts these Matplotlib palettes (``"magma"``, ``"viridis"``,
+FEWview accepts these Matplotlib palettes (``"magma"``, ``"viridis"``,
 ``"plasma"``, ``"inferno"``, ``"cividis"``, ``"cool"``, ``"blues"``) plus four
 palettes tuned for volume rendering:
 
@@ -25,7 +25,7 @@ The **opacity profile** decides how scalar values map to transparency:
     Nested translucent positive-strain sheets. Requires a ``plus`` or ``cross``
     strain component.
 ``flux``
-    Logarithmically compressed energy flux. Requires the ``energy_flux``
+    Gamma-scaled energy flux. Requires the ``energy_flux``
     component.
 """
 

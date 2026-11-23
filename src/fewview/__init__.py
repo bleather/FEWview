@@ -1,6 +1,6 @@
-r"""Fewview: full-sky volume visualizations for FEW EMRI waveforms.
+r"""FEWview: full-sky volume visualizations for FEW EMRI waveforms.
 
-Fewview turns a `FastEMRIWaveforms <https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms>`_
+FEWview turns a `FastEMRIWaveforms <https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms>`_
 waveform into a spherical, retarded-time picture of the gravitational wave. The
 fully relativistic ``FastKerrEccentricEquatorialFlux`` modes are reconstructed
 into :math:`h_{\ell m}(t)`, combined with spin-weighted spherical harmonics over

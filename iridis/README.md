@@ -1,6 +1,6 @@
 # Iridis flythrough scripts
 
-Site-specific helpers for rendering long Fewview movies on Iridis (Southampton
+Site-specific helpers for rendering long FEWview movies on Iridis (Southampton
 HPC). These are **not** part of the installable package; they wrap the generic
 `fewview-cluster-job` tool (see [`../docs/cluster_rendering.md`](../docs/cluster_rendering.md))
 with Iridis partition/account/module details and a fixed camera shot.

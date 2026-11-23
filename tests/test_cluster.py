@@ -1,6 +1,8 @@
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fewview.cli import SEGMENT_RENDER_VERSION, cluster_job, cluster_merge, cluster_segment
 
@@ -119,6 +121,40 @@ class ClusterCameraFlagTests(unittest.TestCase):
             (folder / "segment_0000.done").write_text("complete\n", encoding="utf-8")
             with self.assertRaisesRegex(SystemExit, "Render segment_0000 again"):
                 cluster_merge.main([tmp, str(folder / "movie.mp4"), "--segments", "1"])
+
+    def test_custom_style_is_frozen_for_each_queued_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            (project / "modes.npz").touch()
+            style = project / "paper.mplstyle"
+            job = project / "job"
+            for size in (10, 12):
+                style.write_text(f"font.size: {size}\n")
+                cluster_job.main(["modes.npz", "--project-dir", tmp, "--job-dir", str(job),
+                                  "--waveform-style-file", str(style)])
+                script = (job / "render_array.slurm").read_text()
+                snapshots = list((job / "segments").glob("*/waveform.mplstyle"))
+                current = next(p for p in snapshots if p.read_text() == style.read_text())
+                self.assertIn(str(current), script)
+            self.assertEqual(len(snapshots), 2)
+            self.assertEqual({p.read_text() for p in snapshots}, {"font.size: 10\n", "font.size: 12\n"})
+
+    def test_failed_merge_preserves_previous_movie(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            (folder / "segment_0000.mp4").touch()
+            (folder / "segment_0000.done").write_text(f"{SEGMENT_RENDER_VERSION}:icon\n")
+            output = folder / "movie.mp4"
+            output.write_bytes(b"previous movie")
+
+            def fail_after_open(command, *, check):
+                Path(command[-1]).write_bytes(b"partial")
+                raise subprocess.CalledProcessError(1, command)
+
+            with patch.object(subprocess, "run", side_effect=fail_after_open):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    cluster_merge.main([tmp, str(output), "--segments", "1"])
+            self.assertEqual(output.read_bytes(), b"previous movie")
 
     def test_merge_catches_different_logos(self):
         with tempfile.TemporaryDirectory() as tmp:
