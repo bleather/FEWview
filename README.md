@@ -1,8 +1,5 @@
 <h1>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/bleather/FEWview/main/docs/img/FEWview-on-dark.png">
-    <img src="https://raw.githubusercontent.com/bleather/FEWview/main/docs/img/FEWview-on-light.png" width="320" alt="FEWview">
-  </picture>
+  <img src="https://raw.githubusercontent.com/bleather/FEWview/main/docs/img/icons/FEWview-192.png" width="56" height="56" align="absmiddle" alt=""> FEWview
 </h1>
 
 FEWview renders the gravitational waves from an extreme mass-ratio inspiral.
@@ -10,7 +7,10 @@ It takes the radiative modes from FastEMRIWaveforms (FEW) and evaluates the
 strain in every direction around the binary. Radius measures look-back time.
 In a still, a crest near the edge left the source earlier than one near the centre.
 
-![Oblique view of an eccentric Kerr inspiral, showing successive wavefronts in the plus polarisation](https://raw.githubusercontent.com/bleather/FEWview/main/docs/images/gallery-magma-oblique.png)
+![Ice-blue wavefronts spiral around an eccentric Kerr orbit viewed from above the orbital plane. A glowing trace below shows the plus polarisation leading up to the frame.](https://raw.githubusercontent.com/bleather/FEWview/main/docs/images/ice-orbit-waveform.png)
+
+The trace shows the plus polarisation from the same inspiral, viewed at 60° to
+the spin axis. Zero on the time axis marks the instant shown above.
 
 ## Installation
 
