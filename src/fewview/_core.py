@@ -2316,6 +2316,7 @@ class _WaveformPanelRenderer:
         font_style: WaveformFontStyle,
         style_file: Optional[PathLike],
         background_color: str,
+        glow: bool = False,
         transparent: bool = False,
     ) -> None:
         import matplotlib as mpl
@@ -2366,6 +2367,15 @@ class _WaveformPanelRenderer:
             (self.active_line,) = self.axis.plot(
                 [], [], color="#7cecff", linewidth=1.35 * fs
             )
+            if glow:
+                from matplotlib import patheffects
+
+                self.active_line.set_path_effects([
+                    patheffects.Stroke(linewidth=8.0 * fs, foreground=(0.15, 0.52, 1, 0.07)),
+                    patheffects.Stroke(linewidth=4.8 * fs, foreground=(0.19, 0.65, 1, 0.15)),
+                    patheffects.Stroke(linewidth=2.8 * fs, foreground=(0.35, 0.80, 1, 0.30)),
+                    patheffects.Normal(),
+                ])
             self.marker = self.axis.axvline(
                 0.0, color="#ffd66d", linewidth=1.1 * fs, alpha=0.95
             )
@@ -2534,6 +2544,7 @@ def render_mode_frame(
     waveform_fraction: float = 0.22,
     waveform_theta: float = np.pi / 3.0,
     waveform_phi: float = 0.0,
+    waveform_glow: bool = False,
     waveform_font_style: WaveformFontStyle = "latex",
     waveform_style_file: Optional[PathLike] = None,
     waveform_transparent: bool = True,
@@ -2715,6 +2726,7 @@ def render_mode_frame(
             height=panel_height * image_scale,
             theta=waveform_theta,
             phi=waveform_phi,
+            glow=waveform_glow,
             font_style=waveform_font_style,
             style_file=waveform_style_file,
             background_color=resolved_presentation.background_color,
@@ -2805,6 +2817,7 @@ def render_mode_animation(
     waveform_fraction: float = 0.22,
     waveform_theta: float = np.pi / 3.0,
     waveform_phi: float = 0.0,
+    waveform_glow: bool = False,
     waveform_font_style: WaveformFontStyle = "latex",
     waveform_style_file: Optional[PathLike] = None,
     waveform_transparent: bool = True,
@@ -3104,6 +3117,7 @@ def render_mode_animation(
             height=panel_height * image_scale,
             theta=waveform_theta,
             phi=waveform_phi,
+            glow=waveform_glow,
             font_style=waveform_font_style,
             style_file=waveform_style_file,
             background_color=resolved_presentation.background_color,

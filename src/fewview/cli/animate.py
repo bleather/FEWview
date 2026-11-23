@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from fewview import (
+    available_color_schemes,
     choose_max_delay,
     estimate_waveform_period,
     render_mode_animation,
@@ -119,18 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--color-scheme",
-        choices=(
-            "magma",
-            "aurora",
-            "rainbow",
-            "inferno",
-            "plasma",
-            "viridis",
-            "cividis",
-            "cool",
-            "blues",
-            "cinematic",
-        ),
+        choices=available_color_schemes(),
         default="aurora",
     )
     parser.add_argument(
@@ -155,6 +145,8 @@ def build_parser() -> argparse.ArgumentParser:
         default="oblique",
         help="face_on projects the signed-strain chart axis onto the source",
     )
+    parser.add_argument("--camera-latitude", type=float, help="degrees above the orbital plane")
+    parser.add_argument("--camera-longitude", type=float, help="azimuth in degrees from +x")
     parser.add_argument("--camera-zoom", type=float, default=None)
     parser.add_argument(
         "--camera-orbit",
@@ -232,10 +224,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="waveform panel height as a fraction of the output frame",
     )
     parser.add_argument(
+        "--waveform-transparent",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="overlay the strain trace on the scene or place it in a separate strip",
+    )
+    parser.add_argument(
+        "--waveform-glow",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="add an ice-blue glow to the elapsed part of the strain trace",
+    )
+    parser.add_argument(
         "--waveform-font-style",
         choices=("latex", "sans"),
         default="latex",
-        help="use bundled LaTeX-like STIX fonts or the former sans-serif style",
+        help="use Computer Modern math (latex) or sans-serif labels",
     )
     parser.add_argument(
         "--waveform-style-file",
@@ -321,6 +325,8 @@ def main(argv: list[str] | None = None) -> int:
         window_size=(args.width, args.height),
         image_scale=args.image_scale,
         camera_view=args.camera_view,
+        camera_latitude=args.camera_latitude,
+        camera_longitude=args.camera_longitude,
         camera_zoom=args.camera_zoom,
         camera_orbit_degrees=args.camera_orbit,
         starfield=args.starfield,
@@ -336,6 +342,8 @@ def main(argv: list[str] | None = None) -> int:
         orbit_display_radius=args.orbit_size,
         body_exaggeration=args.body_exaggeration,
         waveform_fraction=args.waveform_height,
+        waveform_glow=args.waveform_glow,
+        waveform_transparent=args.waveform_transparent,
         waveform_font_style=args.waveform_font_style,
         waveform_style_file=args.waveform_style_file,
         normalization_time=args.normalization_time,

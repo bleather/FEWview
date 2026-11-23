@@ -8,6 +8,7 @@ from fewview._core import (
     _PRESET_CAMERA_DISTANCE,
     _PRIMARY_HALO_SCALE,
     _SECONDARY_BODY_SCALE,
+    _WaveformPanelRenderer,
     _add_glowing_trail,
     _apply_camera_offset,
     _camera_angle_vectors,
@@ -69,6 +70,23 @@ class VisualizationTest(unittest.TestCase):
         h_plus, h_cross = polarizations_from_complex(strain, convention="few")
         np.testing.assert_allclose(h_plus, self.h_plus)
         np.testing.assert_allclose(h_cross, self.h_cross)
+
+    def test_waveform_glow_only_lights_the_elapsed_trace(self):
+        waveform = MagicMock()
+        waveform.time = np.linspace(0, 4, 81)
+        waveform.strain.return_value = np.cos(2 * np.pi * waveform.time)
+        settings = dict(
+            start_time=0, end_time=4, width=640, height=158, theta=0, phi=0,
+            font_style="latex", style_file=None, background_color="black",
+        )
+        for transparent in (False, True):
+            classic = _WaveformPanelRenderer(waveform, transparent=transparent, **settings)
+            glowing = _WaveformPanelRenderer(
+                waveform, transparent=transparent, glow=True, **settings
+            )
+            before, after = classic.render(2), glowing.render(2)
+            self.assertTrue(np.any(before[:, :300] != after[:, :300]))
+            np.testing.assert_array_equal(before[:, 370:], after[:, 370:])
 
     def test_internal_complex_convention(self):
         strain = self.h_plus + 1j * self.h_cross

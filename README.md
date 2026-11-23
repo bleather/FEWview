@@ -59,7 +59,10 @@ without generating the inspiral again.
 
 ```bash
 fewview-animate circular/relativistic-modes.npz --output circular/orbit.mp4 \
-  --frames 48 --fps 24 --animation-cycles 2 --grid-resolution 64
+  --frames 48 --fps 24 --animation-cycles 2 --grid-resolution 64 \
+  --opacity-profile shells --presentation shells_dramatic --color-scheme ice \
+  --camera-latitude 18 --camera-longitude -35 \
+  --source-glow --waveform-glow --no-waveform-transparent
 ```
 
 For an eccentric Kerr inspiral, `fewview-render --output-dir kerr` uses

@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 
 from fewview import (
+    available_color_schemes,
     choose_max_delay,
     estimate_waveform_period,
     render_mode_animation,
@@ -92,19 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--color-scheme",
-        choices=(
-            "magma",
-            "aurora",
-            "rainbow",
-            "inferno",
-            "plasma",
-            "viridis",
-            "cividis",
-            "cool",
-            "blues",
-            "cinematic",
-            "ice",
-        ),
+        choices=available_color_schemes(),
         default="rainbow",
     )
     parser.add_argument(
@@ -178,6 +167,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--orbit-display-radius", type=float, default=0.25)
     parser.add_argument("--waveform-fraction", type=float, default=0.22)
+    parser.add_argument(
+        "--waveform-glow",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="add an ice-blue glow to the elapsed part of the strain trace",
+    )
     parser.add_argument(
         "--waveform-font-style",
         choices=("latex", "sans"),
@@ -307,6 +302,7 @@ def main(argv: list[str] | None = None) -> int:
         source_glow=args.source_glow,
         orbit_display_radius=args.orbit_display_radius,
         waveform_fraction=args.waveform_fraction,
+        waveform_glow=args.waveform_glow,
         waveform_font_style=args.waveform_font_style,
         waveform_style_file=args.waveform_style_file,
         global_start_time=global_start,

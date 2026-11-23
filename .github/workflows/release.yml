@@ -76,7 +76,9 @@ jobs:
           fewview-render --model Circ1PAT1R --a 0.00001 --p0 10 --e0 0 --chi2 0.3 \
             --T 0.0002 --grid-resolution 24 --image-width 320 --image-height 240 --output-dir smoke
           fewview-animate smoke/relativistic-modes.npz --frames 2 --fps 2 \
-            --grid-resolution 24 --width 320 --height 240 --output smoke/orbit.mp4
+            --grid-resolution 24 --width 320 --height 240 --output smoke/orbit.mp4 \
+            --color-scheme ice --camera-latitude 18 --camera-longitude -35 \
+            --source-glow --waveform-glow --no-waveform-transparent
           test -s smoke/relativistic-emri-volume.png
           test -s smoke/orbit.mp4
           fewview-cluster-job --help

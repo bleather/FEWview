@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from fewview import (
+    available_color_schemes,
     build_mode_retarded_time_volume,
     choose_max_delay,
     estimate_waveform_period,
@@ -131,18 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     display.add_argument(
         "--color-scheme",
-        choices=(
-            "magma",
-            "aurora",
-            "rainbow",
-            "inferno",
-            "plasma",
-            "viridis",
-            "cividis",
-            "cool",
-            "blues",
-            "cinematic",
-        ),
+        choices=available_color_schemes(),
         default="aurora",
         help="volume colour palette; aurora is the presentation default",
     )

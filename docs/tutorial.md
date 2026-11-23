@@ -170,6 +170,15 @@ fv.render_mode_animation(
 )
 ```
 
+`waveform_glow=True` lights up the part of the strain trace the animation has
+already played. The rest of the trace stays dim so you can see where the orbit
+sits in the cycle. To put the trace beneath the orbit, set
+`waveform_transparent=False`. The panel uses Computer Modern math by default.
+Both options also work in `render_mode_frame`. For a still, set
+`waveform_start_time` and `waveform_end_time` to choose the interval in the panel.
+The animation and cluster commands accept `--waveform-glow` and
+`--no-waveform-transparent`.
+
 `--animation-cycles` (via `start_time`/`end_time` here) sets how much inspiral
 is traversed; the frame count sets how smoothly. Aim for at least ~20 frames per
 wave cycle, or the wave pattern strobes.

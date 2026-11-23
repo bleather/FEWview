@@ -11,6 +11,8 @@ import sys
 import textwrap
 from pathlib import Path
 
+from fewview import available_color_schemes
+
 
 DEFAULT_FRAMES = 1000
 # How many array tasks run at once when --max-concurrent is not given.
@@ -77,6 +79,7 @@ RENDER_KEYS = (
     "source_glow",
     "orbit_display_radius",
     "waveform_fraction",
+    "waveform_glow",
     "waveform_font_style",
     "waveform_style_file",
 )
@@ -266,19 +269,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     render.add_argument(
         "--color-scheme",
-        choices=(
-            "magma",
-            "aurora",
-            "rainbow",
-            "inferno",
-            "plasma",
-            "viridis",
-            "cividis",
-            "cool",
-            "blues",
-            "cinematic",
-            "ice",
-        ),
+        choices=available_color_schemes(),
         default="rainbow",
     )
     render.add_argument(
@@ -397,6 +388,12 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--orbit-display-radius", type=float, default=0.25)
     render.add_argument("--waveform-fraction", type=float, default=0.22)
     render.add_argument(
+        "--waveform-glow",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="add an ice-blue glow to the elapsed part of the strain trace",
+    )
+    render.add_argument(
         "--waveform-font-style",
         choices=("latex", "sans"),
         default="latex",
@@ -505,6 +502,8 @@ def _worker_arguments(
     ]
     if args.source_glow:
         values.append("--source-glow")
+    if args.waveform_glow:
+        values.append("--waveform-glow")
     if args.starfield is not None:
         values.append("--starfield" if args.starfield else "--no-starfield")
     if args.waveform_style_file is not None:
@@ -533,9 +532,11 @@ def _worker_arguments(
 
 def _run_fingerprint(args, render_keys, modes, mode_stat):
     """Return a short hash identifying the render configuration."""
-    # Classic runs can resume segments rendered before source glow was added.
-    if not args.source_glow:
-        render_keys = tuple(key for key in render_keys if key != "source_glow")
+    # Omit disabled glow flags so renders from before each option can resume.
+    render_keys = tuple(
+        key for key in render_keys
+        if key not in ("source_glow", "waveform_glow") or getattr(args, key)
+    )
     fingerprint_source = repr(
         (
             str(modes),
