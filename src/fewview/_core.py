@@ -23,7 +23,7 @@ from numba import njit, prange
 
 from few.utils.ylm import GetYlms, _ylm_kernel_inner
 
-from ._credit import add_figure_credit, add_volume_credit, credit_strip
+from ._credit import Logo, add_figure_credit, add_volume_credit, prepare_frame_logo, stamp_frame
 
 
 AngularPattern = Literal["line_of_sight", "quadrupole", "mode_resolved"]
@@ -1347,6 +1347,7 @@ def build_retarded_time_volume(
 def plot_strain_surface(
     surface: StrainSurface,
     *,
+    logo: Logo = "wordmark",
     ax=None,
     cmap: str = "coolwarm",
     colorbar: bool = True,
@@ -1375,7 +1376,7 @@ def plot_strain_surface(
             surface, ax=ax, cmap=cmap, colorbar=colorbar,
             view_elevation=view_elevation, view_azimuth=view_azimuth,
         )
-        add_figure_credit(figure)
+        add_figure_credit(figure, logo)
         return figure, ax
 
 
@@ -1428,6 +1429,7 @@ def _plot_strain_surface_body(
 def plot_volume_slice(
     volume: RetardedTimeVolume,
     *,
+    logo: Logo = "wordmark",
     component: VolumeComponent = "plus",
     plane: Literal["xy", "xz", "yz"] = "xz",
     ax=None,
@@ -1454,7 +1456,7 @@ def plot_volume_slice(
         figure, ax = _plot_volume_slice_body(
             volume, component=component, plane=plane, ax=ax, cmap=cmap, colorbar=colorbar
         )
-        add_figure_credit(figure)
+        add_figure_credit(figure, logo)
         return figure, ax
 
 
@@ -1729,6 +1731,7 @@ def _resolve_volume_presentation(
 def render_volume(
     volume: RetardedTimeVolume,
     *,
+    logo: Logo = "wordmark",
     component: VolumeComponent = "plus",
     screenshot: Optional[PathLike] = None,
     show: bool = True,
@@ -1875,7 +1878,7 @@ def render_volume(
         source_marker=source_marker,
         show_scalar_bar=show_scalar_bar,
     )
-    add_volume_credit(plotter, *window_size, plotter.background_color.float_rgb)
+    add_volume_credit(plotter, *window_size, plotter.background_color.float_rgb, logo)
     screenshot_path = None if screenshot is None else str(Path(screenshot))
     if show:
         plotter.show(auto_close=False)
@@ -2396,6 +2399,7 @@ class _WaveformPanelRenderer:
         style_file: Optional[PathLike],
         background_color: str,
         glow: bool = False,
+        logo_width: int = 0,
         transparent: bool = False,
     ) -> None:
         import matplotlib as mpl
@@ -2433,7 +2437,8 @@ class _WaveformPanelRenderer:
                 facecolor=panel_face,
             )
             self.canvas = FigureCanvasAgg(figure)
-            self.axis = figure.add_axes((0.055, 0.27, 0.92, 0.66))
+            right_margin = logo_width / width + 0.04 if logo_width else 0.025
+            self.axis = figure.add_axes((0.055, 0.27, 1 - 0.055 - right_margin, 0.66))
             self.axis.set_facecolor(panel_face)
             self.axis.axhline(0.0, color="#20313a", linewidth=0.7 * fs, zorder=0)
             self.axis.plot(
@@ -2538,18 +2543,17 @@ class _WaveformPanelRenderer:
 
 
 def _frame_layout(window_size, waveform_fraction, show_waveform, waveform_transparent,
-                  image_scale, background):
-    """Allocate rows to the scene, waveform and credit at the requested size."""
+                  image_scale, background, logo):
+    """Size the scene and waveform panel and prepare the corner logo once."""
     width, height = window_size
     if min(window_size) <= 0:
         raise ValueError("window dimensions must be positive")
     panel_height = round(height * waveform_fraction / 2) * 2 if show_waveform else 0
-    footer = credit_strip(width, height, image_scale, background)
-    content_height = height - footer.shape[0] // image_scale
-    scene_height = content_height if waveform_transparent else content_height - panel_height
-    if scene_height <= 0 or content_height < panel_height:
-        raise ValueError("window height is too small for the waveform and credit")
-    return (width, scene_height), panel_height, footer
+    mark = prepare_frame_logo(width * image_scale, height * image_scale, background, logo)
+    scene_height = height if waveform_transparent else height - panel_height
+    if scene_height <= 0 or height < panel_height:
+        raise ValueError("window height is too small for the waveform")
+    return (width, scene_height), panel_height, mark
 
 
 def _combine_frame_and_panel(
@@ -2583,6 +2587,7 @@ def render_mode_frame(
     waveform: RelativisticModeWaveform,
     screenshot: PathLike,
     *,
+    logo: Logo = "wordmark",
     max_delay: float,
     frame_time: Optional[float] = None,
     component: VolumeComponent = "plus",
@@ -2705,9 +2710,9 @@ def render_mode_frame(
     if not panel_start <= frame <= panel_end:
         raise ValueError("frame_time must lie inside the waveform panel interval")
 
-    main_window_size, panel_height, footer = _frame_layout(
+    main_window_size, panel_height, mark = _frame_layout(
         window_size, waveform_fraction, show_waveform, waveform_transparent,
-        image_scale, resolved_presentation.background_color,
+        image_scale, resolved_presentation.background_color, logo,
     )
 
     sampling = _prepare_mode_volume_sampling(
@@ -2815,6 +2820,7 @@ def render_mode_frame(
             style_file=waveform_style_file,
             background_color=resolved_presentation.background_color,
             transparent=waveform_transparent,
+            logo_width=mark.width,
         )
         if show_waveform
         else None
@@ -2830,7 +2836,7 @@ def render_mode_frame(
         if waveform_panel is not None:
             panel = waveform_panel.render(frame)
             image = _combine_frame_and_panel(image, panel)
-        image = np.vstack((image, footer))
+        image = stamp_frame(image, mark)
         imageio.imwrite(output, image)
     finally:
         plotter.close()
@@ -2841,6 +2847,7 @@ def render_mode_animation(
     waveform: RelativisticModeWaveform,
     filename: PathLike,
     *,
+    logo: Logo = "wordmark",
     max_delay: float,
     component: VolumeComponent = "plus",
     flux_mode_combination: FluxModeCombination = "coherent",
@@ -3038,9 +3045,9 @@ def render_mode_animation(
         _validate_frame_window(time, float(normalization_frame), max_delay)
     frame_times = np.linspace(start, end, frames)
 
-    main_window_size, panel_height, footer = _frame_layout(
+    main_window_size, panel_height, mark = _frame_layout(
         window_size, waveform_fraction, show_waveform, waveform_transparent,
-        image_scale, resolved_presentation.background_color,
+        image_scale, resolved_presentation.background_color, logo,
     )
 
     sampling = _prepare_mode_volume_sampling(
@@ -3197,6 +3204,7 @@ def render_mode_animation(
             style_file=waveform_style_file,
             background_color=resolved_presentation.background_color,
             transparent=waveform_transparent,
+            logo_width=mark.width,
         )
         if show_waveform
         else None
@@ -3365,7 +3373,7 @@ def render_mode_animation(
             if waveform_panel is not None:
                 panel = waveform_panel.render(float(frame_time))
                 image = _combine_frame_and_panel(image, panel)
-            image = np.vstack((image, footer))
+            image = stamp_frame(image, mark)
             writer.append_data(image)
     finally:
         writer.close()

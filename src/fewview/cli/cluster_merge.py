@@ -45,9 +45,15 @@ def main(argv: list[str] | None = None) -> int:
         formatted = "\n  ".join(missing)
         raise SystemExit(f"Cannot merge; files are missing:\n  {formatted}")
 
+    layouts = set()
     for marker in marker_files:
-        if marker.read_text(encoding="utf-8").strip() != SEGMENT_RENDER_VERSION:
+        layout = marker.read_text(encoding="utf-8").strip()
+        if layout not in (f"{SEGMENT_RENDER_VERSION}:wordmark", f"{SEGMENT_RENDER_VERSION}:icon"):
             raise SystemExit(f"Render {marker.stem} again with the current FEWview before merging.")
+
+        layouts.add(layout)
+    if len(layouts) > 1:
+        raise SystemExit("Render all segments with the same --logo before merging.")
 
     import imageio_ffmpeg
 

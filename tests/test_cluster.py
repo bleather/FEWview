@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fewview.cli import cluster_job, cluster_merge, cluster_segment
+from fewview.cli import SEGMENT_RENDER_VERSION, cluster_job, cluster_merge, cluster_segment
 
 
 class ClusterCameraFlagTests(unittest.TestCase):
@@ -23,6 +23,7 @@ class ClusterCameraFlagTests(unittest.TestCase):
                 "--camera-azimuth", "5",
                 "--camera-elevation", "-3",
                 "--no-waveform-transparent",
+                "--logo", "icon",
             ]
         )
         worker = cluster_job._worker_arguments(args, Path("modes.npz"), Path("segs"))
@@ -39,6 +40,7 @@ class ClusterCameraFlagTests(unittest.TestCase):
         self.assertEqual(seg.camera_azimuth, 5.0)
         self.assertEqual(seg.camera_elevation, -3.0)
         self.assertFalse(seg.waveform_transparent)
+        self.assertEqual(seg.logo, "icon")
 
     def test_defaults_round_trip_and_omit_absolute_angles(self):
         args = self._job_args([])
@@ -117,6 +119,16 @@ class ClusterCameraFlagTests(unittest.TestCase):
             (folder / "segment_0000.done").write_text("complete\n", encoding="utf-8")
             with self.assertRaisesRegex(SystemExit, "Render segment_0000 again"):
                 cluster_merge.main([tmp, str(folder / "movie.mp4"), "--segments", "1"])
+
+    def test_merge_catches_different_logos(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            for index, logo in enumerate(("wordmark", "icon")):
+                segment = folder / f"segment_{index:04d}"
+                segment.with_suffix(".mp4").touch()
+                segment.with_suffix(".done").write_text(f"{SEGMENT_RENDER_VERSION}:{logo}\n")
+            with self.assertRaisesRegex(SystemExit, "same --logo"):
+                cluster_merge.main([tmp, str(folder / "movie.mp4"), "--segments", "2"])
 
 
 if __name__ == "__main__":

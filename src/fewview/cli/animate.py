@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
+from fewview.cli import add_logo_argument
 from fewview import (
     available_color_schemes,
     choose_max_delay,
@@ -247,6 +248,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="optional Matplotlib .mplstyle file for the waveform panel",
     )
+    add_logo_argument(parser)
     return parser
 
 
@@ -342,6 +344,7 @@ def main(argv: list[str] | None = None) -> int:
         orbit_display_radius=args.orbit_size,
         body_exaggeration=args.body_exaggeration,
         waveform_fraction=args.waveform_height,
+        logo=args.logo,
         waveform_glow=args.waveform_glow,
         waveform_transparent=args.waveform_transparent,
         waveform_font_style=args.waveform_font_style,

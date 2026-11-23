@@ -75,15 +75,15 @@ retarded-time window, polarisation and viewing angle.
 [Model and API guide](https://github.com/bleather/FEWview/blob/main/docs/reference.md) ·
 [Rendering on Slurm](https://github.com/bleather/FEWview/blob/main/docs/cluster_rendering.md)
 
-FEWview adds its wordmark and “© Benjamin Leather” to each figure and movie
-to credit the rendering software.
+Figures and movies carry the FEWview wordmark in the lower-right corner.
+Use `--logo icon` (or `logo="icon"` in Python) for the orbit symbol alone.
 
 ## Citation
 
 If you use FEWview to make a figure or movie for a paper, please cite the
-version you used. For v0.1.1, use the following reference.
+version you used. For v0.2.0, use the following reference.
 
-> Leather, B. (2026). *FEWview* (v0.1.1) [Software]. [GitHub release](https://github.com/bleather/FEWview/releases/tag/v0.1.1).
+> Leather, B. (2026). *FEWview* (v0.2.0) [Software]. [GitHub release](https://github.com/bleather/FEWview/releases/tag/v0.2.0).
 
 For BibTeX, select **Cite this repository** on the GitHub repository page.
 Please also cite FastEMRIWaveforms and the waveform model you used to generate

@@ -10,6 +10,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from fewview.cli import add_logo_argument
 from fewview import (
     available_color_schemes,
     build_mode_retarded_time_volume,
@@ -191,6 +192,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--source-marker", action=argparse.BooleanOptionalAction, default=False
     )
     display.add_argument("--show", action="store_true")
+    add_logo_argument(parser)
     return parser
 
 
@@ -287,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     slice_figure, _ = plot_volume_slice(
-        volume, component="plus", plane="xz"
+        volume, component="plus", plane="xz", logo=args.logo
     )
     slice_path = args.output_dir / "relativistic-volume-slice.png"
     slice_figure.savefig(slice_path, dpi=180, bbox_inches="tight")
@@ -307,6 +309,7 @@ def main(argv: list[str] | None = None) -> int:
             color_exposure=args.color_exposure,
             background_color=args.background_color,
             screenshot=render_path,
+            logo=args.logo,
             show=args.show,
             opacity=args.opacity,
             shell_count=args.shell_count,

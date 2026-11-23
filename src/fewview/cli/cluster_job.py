@@ -12,7 +12,7 @@ import textwrap
 from pathlib import Path
 
 from fewview import available_color_schemes
-from fewview.cli import SEGMENT_RENDER_VERSION
+from fewview.cli import SEGMENT_RENDER_VERSION, add_logo_argument
 
 
 DEFAULT_FRAMES = 1000
@@ -80,6 +80,7 @@ RENDER_KEYS = (
     "source_glow",
     "orbit_display_radius",
     "waveform_fraction",
+    "logo",
     "waveform_glow",
     "waveform_font_style",
     "waveform_style_file",
@@ -404,6 +405,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-name",
         default="relativistic-emri-animation.mp4",
     )
+    add_logo_argument(parser)
     return parser
 
 
@@ -414,6 +416,7 @@ def _worker_arguments(
         str(modes),
         "--output-dir",
         str(segments_dir),
+        "--logo", args.logo,
         "--segments",
         str(args.segments),
         "--frames",

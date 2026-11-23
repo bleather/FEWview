@@ -5,8 +5,8 @@ title: FEWview
 authors:
   - family-names: Leather
     given-names: Benjamin
-version: "0.1.1"
+version: "0.2.0"
 date-released: 2026-11-23
 repository-code: "https://github.com/bleather/FEWview"
-url: "https://github.com/bleather/FEWview/releases/tag/v0.1.1"
+url: "https://github.com/bleather/FEWview/releases/tag/v0.2.0"
 license: MIT

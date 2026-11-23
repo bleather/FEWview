@@ -59,12 +59,13 @@ For the coherent flux proxy the field is the squared magnitude of the strain
 time derivative. Normalisation and radial tapering control the display, so the
 brightness in the rendered image has no absolute flux units.
 
-## Render credit
+## Corner logo
 
-The plotting and rendering functions include a footer reading “Rendered by
-FEWview © Benjamin Leather”. FEWview appears as its transparent wordmark, with
-the surrounding text in Computer Modern. The notice identifies the software
-and its author. Ownership of the rendered figure or movie is a separate matter.
+Figures and movies carry the transparent FEWview wordmark in the lower-right
+corner. For a smaller mark, pass `logo="icon"` to a plotting or rendering
+function, or `--logo icon` to the still, animation or Slurm commands.
+The icon and wordmark use the same corner inset. The wordmark adapts to
+the background colour.
 
 ## Command-line tools
 
