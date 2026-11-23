@@ -7,10 +7,11 @@ It takes the radiative modes from FastEMRIWaveforms (FEW) and evaluates the
 strain in every direction around the binary. Radius measures look-back time.
 In a still, a crest near the edge left the source earlier than one near the centre.
 
-![Ice-blue wavefronts spiral around an eccentric Kerr orbit viewed from above the orbital plane. A glowing trace below shows the plus polarisation leading up to the frame.](https://raw.githubusercontent.com/bleather/FEWview/main/docs/images/ice-orbit-waveform.png)
+![Four ice-blue views of an eccentric Kerr inspiral through one waveform cycle, seen at a shallow angle to the orbital plane. A glowing strain trace below marks the times of frames A to D.](https://raw.githubusercontent.com/bleather/FEWview/main/docs/images/ice-orbit-waveform.png)
 
-The trace shows the plus polarisation from the same inspiral, viewed at 60° to
-the spin axis. Zero on the time axis marks the instant shown above.
+The camera stays 18° above the orbital plane. Read the frames from A to D,
+from one crest of the plus polarisation to the next. The trace underneath
+shows the strain along the same line of sight, with each frame marked.
 
 ## Installation
 
