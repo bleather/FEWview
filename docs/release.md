@@ -24,6 +24,6 @@ independently, install it in an empty environment outside the checkout, run
 The version is defined in `src/fewview/_version.py`. Push the reviewed commit,
 then tag it with that version prefixed by `v` (for example, `v0.1.0`).
 The release workflow checks the tag against the wheel metadata, runs the
-tests, builds the manual and attaches the wheel, source archive and HTML
-manual to a draft GitHub release. Review the draft and publish it on GitHub.
+tests, builds the manual and attaches the wheel, source archive, HTML manual
+and logo bundle to a draft GitHub release. Review the draft and publish it on GitHub.
 A PyPI upload is a separate maintainer action.

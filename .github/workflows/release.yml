@@ -23,6 +23,9 @@ jobs:
       - run: python -m twine check --strict dist/*
       - run: python -m mkdocs build --strict
       - run: python -m zipfile -c dist/fewview-html.zip site
+      - name: Bundle the project artwork
+        working-directory: docs/img
+        run: python -m zipfile -c ../../dist/fewview-logo.zip FEWview-* icons favicon.ico DM-Sans-OFL.txt
       - uses: actions/upload-artifact@v4
         with:
           name: distribution

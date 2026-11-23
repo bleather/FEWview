@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block site_name %}
+  <a class="navbar-brand" href="{{ nav.homepage.url|url }}">
+    <img src="{{ 'img/FEWview-on-dark.png'|url }}" height="34" alt="{{ config.site_name }}">
+  </a>
+{% endblock %}
+
+{% block extrahead %}
+  {{ super() }}
+  <link rel="apple-touch-icon" href="{{ 'img/icons/FEWview-180.png'|url }}">
+{% endblock %}
