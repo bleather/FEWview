@@ -202,6 +202,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="inspiral trail colour; any Matplotlib colour spec",
     )
     parser.add_argument(
+        "--source-glow",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="shade the primary and render the trajectory as a glowing 3D tube",
+    )
+    parser.add_argument(
         "--trajectory-tube",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -326,6 +332,7 @@ def main(argv: list[str] | None = None) -> int:
         trajectory_line_width=args.trajectory_line_width,
         trajectory_color=args.trajectory_color,
         trajectory_as_tube=args.trajectory_tube,
+        source_glow=args.source_glow,
         orbit_display_radius=args.orbit_size,
         body_exaggeration=args.body_exaggeration,
         waveform_fraction=args.waveform_height,

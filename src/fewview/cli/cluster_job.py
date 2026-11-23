@@ -74,6 +74,7 @@ RENDER_KEYS = (
     "trajectory_color",
     "body_exaggeration",
     "trajectory_tube",
+    "source_glow",
     "orbit_display_radius",
     "waveform_fraction",
     "waveform_font_style",
@@ -383,6 +384,12 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--trajectory-color", default="#00b7ff")
     render.add_argument("--body-exaggeration", type=float, default=2.0)
     render.add_argument(
+        "--source-glow",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="shade the primary and render the trajectory as a glowing 3D tube",
+    )
+    render.add_argument(
         "--trajectory-tube",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -496,6 +503,8 @@ def _worker_arguments(
         if args.waveform_transparent
         else "--no-waveform-transparent",
     ]
+    if args.source_glow:
+        values.append("--source-glow")
     if args.starfield is not None:
         values.append("--starfield" if args.starfield else "--no-starfield")
     if args.waveform_style_file is not None:
@@ -524,6 +533,9 @@ def _worker_arguments(
 
 def _run_fingerprint(args, render_keys, modes, mode_stat):
     """Return a short hash identifying the render configuration."""
+    # Classic runs can resume segments rendered before source glow was added.
+    if not args.source_glow:
+        render_keys = tuple(key for key in render_keys if key != "source_glow")
     fingerprint_source = repr(
         (
             str(modes),

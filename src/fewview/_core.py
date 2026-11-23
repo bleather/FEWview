@@ -2136,6 +2136,39 @@ def _resolve_body_radii(
     return primary_radius, secondary_radius
 
 
+def _add_glowing_trail(plotter, polyline, tube_radius: float) -> None:
+    """Keep the lit core and its translucent falloff on the same live path."""
+    from vtkmodules.vtkFiltersCore import vtkTubeFilter
+
+    for scale, opacity in ((3.2, 0.09), (1.8, 0.22), (1.0, 1.0)):
+        tube = vtkTubeFilter()
+        tube.SetInputData(polyline)
+        tube.SetRadius(tube_radius * scale)
+        tube.SetNumberOfSides(16)
+        tube.CappingOn()
+        plotter.add_mesh(
+            tube, scalars="trajectory_rgba", rgba=True, opacity=opacity,
+            ambient=0.72, diffuse=0.45, specular=0.6, specular_power=24,
+            show_scalar_bar=False,
+        )
+
+
+def _add_rim_lit_primary(plotter, primary) -> None:
+    """Shade the illustrative horizon marker with a directional grazing light."""
+    # Colour the sphere in world coordinates so its light stays put as the
+    # camera orbits. The dark hemisphere and the lit limb show its depth.
+    normals = primary.point_data["Normals"]
+    key = np.array([-0.30, -0.48, 0.82])
+    cosine = np.clip(normals @ (key / np.linalg.norm(key)), 0.0, 1.0)
+    rgb = np.array([2, 5, 15]) + cosine[:, None] ** 2 * [12, 47, 88]
+    rgb += cosine[:, None] ** 9 * [55, 116, 138]
+    primary.point_data["horizon_rgb"] = np.rint(rgb).astype(np.uint8)
+    plotter.add_mesh(
+        primary, scalars="horizon_rgb", rgb=True, lighting=False,
+        show_scalar_bar=False,
+    )
+
+
 def _add_source_overlays(
     plotter,
     waveform: RelativisticModeWaveform,
@@ -2149,6 +2182,7 @@ def _add_source_overlays(
     trajectory_tail_cycles: float,
     trajectory_line_width: float,
     trajectory_as_tube: bool,
+    source_glow: bool,
     trajectory_color: str,
     orbit_display_radius: float,
     primary_body_radius: float,
@@ -2185,15 +2219,19 @@ def _add_source_overlays(
         )
         trajectory_polyline = pv.PolyData()
         _set_polyline_points(trajectory_polyline, tail, color=trajectory_color)
-        plotter.add_mesh(
-            trajectory_polyline,
-            scalars="trajectory_rgba",
-            rgba=True,
-            opacity=1.0,
-            line_width=trajectory_line_width,
-            render_lines_as_tubes=trajectory_as_tube,
-            lighting=False,
-        )
+        if source_glow:
+            tube_radius = orbit_display_radius * radius * 0.008 * trajectory_line_width
+            _add_glowing_trail(plotter, trajectory_polyline, tube_radius)
+        else:
+            plotter.add_mesh(
+                trajectory_polyline,
+                scalars="trajectory_rgba",
+                rgba=True,
+                opacity=1.0,
+                line_width=trajectory_line_width,
+                render_lines_as_tubes=trajectory_as_tube,
+                lighting=False,
+            )
 
     secondary_actor = None
     if show_bodies:
@@ -2206,34 +2244,37 @@ def _add_source_overlays(
             secondary_body_radius=secondary_body_radius,
             body_exaggeration=body_exaggeration,
         )
-        primary_halo = pv.Sphere(
-            radius=_PRIMARY_HALO_SCALE * primary_radius,
-            theta_resolution=64,
-            phi_resolution=64,
-        )
-        plotter.add_mesh(
-            primary_halo,
-            color="#4dc8ff",
-            opacity=0.16,
-            smooth_shading=True,
-            ambient=0.9,
-            diffuse=0.1,
-            specular=0.0,
-        )
         primary = pv.Sphere(
             radius=primary_radius,
             theta_resolution=80,
             phi_resolution=80,
         )
-        plotter.add_mesh(
-            primary,
-            color="#010207",
-            smooth_shading=True,
-            ambient=0.06,
-            diffuse=0.20,
-            specular=1.0,
-            specular_power=95.0,
-        )
+        if source_glow:
+            _add_rim_lit_primary(plotter, primary)
+        else:
+            primary_halo = pv.Sphere(
+                radius=_PRIMARY_HALO_SCALE * primary_radius,
+                theta_resolution=64,
+                phi_resolution=64,
+            )
+            plotter.add_mesh(
+                primary_halo,
+                color="#4dc8ff",
+                opacity=0.16,
+                smooth_shading=True,
+                ambient=0.9,
+                diffuse=0.1,
+                specular=0.0,
+            )
+            plotter.add_mesh(
+                primary,
+                color="#010207",
+                smooth_shading=True,
+                ambient=0.06,
+                diffuse=0.20,
+                specular=1.0,
+                specular_power=95.0,
+            )
         secondary = pv.Sphere(
             radius=secondary_radius,
             theta_resolution=64,
@@ -2485,6 +2526,7 @@ def render_mode_frame(
     trajectory_line_width: float = 1.6,
     trajectory_color: str = DEFAULT_TRAJECTORY_COLOR,
     trajectory_as_tube: bool = False,
+    source_glow: bool = False,
     orbit_display_radius: float = 0.16,
     primary_body_radius: float = 0.043,
     secondary_body_radius: float = 0.014,
@@ -2658,6 +2700,7 @@ def render_mode_frame(
         trajectory_line_width=trajectory_line_width,
         trajectory_color=trajectory_color,
         trajectory_as_tube=trajectory_as_tube,
+        source_glow=source_glow,
         orbit_display_radius=orbit_display_radius,
         primary_body_radius=primary_body_radius,
         secondary_body_radius=secondary_body_radius,
@@ -2754,6 +2797,7 @@ def render_mode_animation(
     trajectory_line_width: float = 1.6,
     trajectory_color: str = DEFAULT_TRAJECTORY_COLOR,
     trajectory_as_tube: bool = False,
+    source_glow: bool = False,
     orbit_display_radius: float = 0.16,
     primary_body_radius: float = 0.043,
     secondary_body_radius: float = 0.014,
@@ -3044,6 +3088,7 @@ def render_mode_animation(
         trajectory_line_width=trajectory_line_width,
         trajectory_color=trajectory_color,
         trajectory_as_tube=trajectory_as_tube,
+        source_glow=source_glow,
         orbit_display_radius=orbit_display_radius,
         primary_body_radius=primary_body_radius,
         secondary_body_radius=secondary_body_radius,
