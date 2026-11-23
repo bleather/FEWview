@@ -72,12 +72,21 @@ retarded-time window, polarisation and viewing angle.
 [Model and API guide](https://github.com/bleather/FEWview/blob/main/docs/reference.md) ·
 [Rendering on Slurm](https://github.com/bleather/FEWview/blob/main/docs/cluster_rendering.md)
 
+## Citation
+
+If you use FEWview to make a figure or movie for a paper, please cite the
+version you used. For v0.1.1, use the following reference.
+
+> Leather, B. (2026). *FEWview* (v0.1.1) [Software]. [GitHub release](https://github.com/bleather/FEWview/releases/tag/v0.1.1).
+
+For BibTeX, select **Cite this repository** on the GitHub repository page.
+Please also cite FastEMRIWaveforms and the waveform model you used to generate
+the inspiral. [FEW citation guide](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms#citation)
+
 ## Acknowledgements
 
 The outgoing-wave visualisation follows the approach used for numerical
 relativity waveforms in gwpv (Nils Vu) and ROSE. FEW supplies the inspiral
-trajectories and amplitudes. If you use these figures in a paper, please cite
-FEW and the waveform model you used. [gwpv](https://github.com/nilsvu/gwpv) ·
-[FEW and its citations](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms#citation)
+trajectories and amplitudes. [gwpv](https://github.com/nilsvu/gwpv)
 
 FEWview is released under the [MIT licence](https://github.com/bleather/FEWview/blob/main/LICENSE).
