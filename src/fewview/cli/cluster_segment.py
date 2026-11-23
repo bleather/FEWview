@@ -184,6 +184,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="rerender a segment even when its completion marker exists",
     )
+    parser.add_argument(
+        "--render-credit", action=argparse.BooleanOptionalAction, default=True,
+        help="include the FEWview software credit in the output",
+    )
     return parser
 
 
@@ -302,6 +306,7 @@ def main(argv: list[str] | None = None) -> int:
         source_glow=args.source_glow,
         orbit_display_radius=args.orbit_display_radius,
         waveform_fraction=args.waveform_fraction,
+        render_credit=args.render_credit,
         waveform_glow=args.waveform_glow,
         waveform_font_style=args.waveform_font_style,
         waveform_style_file=args.waveform_style_file,

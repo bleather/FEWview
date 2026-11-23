@@ -90,6 +90,22 @@ class ClusterCameraFlagTests(unittest.TestCase):
             )
             self.assertTrue(segment.waveform_glow)
 
+    def test_credited_jobs_use_new_segments_and_uncredited_jobs_can_resume(self):
+        modes = Path("modes.npz")
+        stat = Path(__file__).stat()
+        keys = cluster_job.RENDER_KEYS
+        previous_keys = tuple(key for key in keys if key != "render_credit")
+        default = self._job_args([])
+        plain = self._job_args(["--no-render-credit"])
+        fingerprint = cluster_job._run_fingerprint
+        previous = fingerprint(plain, previous_keys, modes, stat)
+        self.assertEqual(fingerprint(plain, keys, modes, stat), previous)
+        self.assertNotEqual(fingerprint(default, keys, modes, stat), previous)
+        for job in (plain, default):
+            worker = cluster_job._worker_arguments(job, modes, Path("segs"))
+            segment = cluster_segment.build_parser().parse_args(worker + ["--segment-index", "0"])
+            self.assertEqual(segment.render_credit, job.render_credit)
+
     def test_camera_flight_settings_change_the_run_fingerprint(self):
         # Different camera options must produce a different run fingerprint,
         # so re-runs do not reuse another shot's completed segments.

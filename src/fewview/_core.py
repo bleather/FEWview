@@ -23,6 +23,8 @@ from numba import njit, prange
 
 from few.utils.ylm import GetYlms, _ylm_kernel_inner
 
+from ._credit import add_figure_credit, add_volume_credit, credit_strip
+
 
 AngularPattern = Literal["line_of_sight", "quadrupole", "mode_resolved"]
 VolumeComponent = Literal["plus", "cross", "amplitude", "energy_flux"]
@@ -1347,6 +1349,7 @@ def plot_strain_surface(
     *,
     ax=None,
     cmap: str = "coolwarm",
+    render_credit: bool = True,
     colorbar: bool = True,
     view_elevation: float = 34.0,
     view_azimuth: float = -58.0,
@@ -1369,10 +1372,13 @@ def plot_strain_surface(
         if ax is None
         else contextlib.nullcontext()
     ):
-        return _plot_strain_surface_body(
+        figure, ax = _plot_strain_surface_body(
             surface, ax=ax, cmap=cmap, colorbar=colorbar,
             view_elevation=view_elevation, view_azimuth=view_azimuth,
         )
+        if render_credit:
+            add_figure_credit(figure)
+        return figure, ax
 
 
 def _plot_strain_surface_body(
@@ -1428,6 +1434,7 @@ def plot_volume_slice(
     plane: Literal["xy", "xz", "yz"] = "xz",
     ax=None,
     cmap: str = "coolwarm",
+    render_credit: bool = True,
     colorbar: bool = True,
 ):
     """Plot a central slice through a retarded-time volume with Matplotlib.
@@ -1447,9 +1454,12 @@ def plot_volume_slice(
         if ax is None
         else contextlib.nullcontext()
     ):
-        return _plot_volume_slice_body(
+        figure, ax = _plot_volume_slice_body(
             volume, component=component, plane=plane, ax=ax, cmap=cmap, colorbar=colorbar
         )
+        if render_credit:
+            add_figure_credit(figure)
+        return figure, ax
 
 
 def _plot_volume_slice_body(volume, *, component, plane, ax, cmap, colorbar):
@@ -1755,6 +1765,7 @@ def render_volume(
     star_count: Optional[int] = None,
     source_marker: bool = False,
     show_scalar_bar: bool = False,
+    render_credit: bool = True,
 ):
     """Render a retarded-time volume using PyVista's GPU ray caster.
 
@@ -1988,6 +1999,9 @@ def render_volume(
     plotter.camera.view_angle = _CAMERA_VIEW_ANGLE
     plotter.camera.zoom(resolved_presentation.camera_zoom)
     _apply_camera_offset(plotter, camera_azimuth, camera_elevation)
+
+    if render_credit:
+        add_volume_credit(plotter, *window_size, resolved_presentation.background_color)
 
     screenshot_path = None if screenshot is None else str(Path(screenshot))
     if show:
@@ -2458,6 +2472,21 @@ class _WaveformPanelRenderer:
         return buffer[..., :3].copy()
 
 
+def _frame_layout(window_size, waveform_fraction, show_waveform, waveform_transparent,
+                  render_credit, image_scale, background):
+    """Allocate rows to the scene, waveform and credit at the requested size."""
+    width, height = window_size
+    if min(window_size) <= 0:
+        raise ValueError("window dimensions must be positive")
+    panel_height = round(height * waveform_fraction / 2) * 2 if show_waveform else 0
+    footer = credit_strip(width, height, image_scale, background) if render_credit else None
+    content_height = height if footer is None else height - footer.shape[0] // image_scale
+    scene_height = content_height if waveform_transparent else content_height - panel_height
+    if scene_height <= 0 or content_height < panel_height:
+        raise ValueError("window height is too small for the waveform and credit")
+    return (width, scene_height), panel_height, footer
+
+
 def _combine_frame_and_panel(
     image: np.ndarray, panel: np.ndarray
 ) -> np.ndarray:
@@ -2544,6 +2573,7 @@ def render_mode_frame(
     waveform_fraction: float = 0.22,
     waveform_theta: float = np.pi / 3.0,
     waveform_phi: float = 0.0,
+    render_credit: bool = True,
     waveform_glow: bool = False,
     waveform_font_style: WaveformFontStyle = "latex",
     waveform_style_file: Optional[PathLike] = None,
@@ -2611,20 +2641,10 @@ def render_mode_frame(
     if not panel_start <= frame <= panel_end:
         raise ValueError("frame_time must lie inside the waveform panel interval")
 
-    total_width, total_height = window_size
-    panel_height = (
-        int(round(total_height * waveform_fraction / 2.0) * 2)
-        if show_waveform
-        else 0
+    main_window_size, panel_height, footer = _frame_layout(
+        window_size, waveform_fraction, show_waveform, waveform_transparent,
+        render_credit, image_scale, resolved_presentation.background_color,
     )
-    transparent_panel = show_waveform and waveform_transparent
-    # A transparent panel is composited over a full-height scene render so the
-    # background shows through it; an opaque panel is stacked below a shorter
-    # scene render, so that render loses the panel's height.
-    main_height = total_height if transparent_panel else total_height - panel_height
-    main_window_size = (total_width, main_height)
-    if min(main_window_size) <= 0:
-        raise ValueError("waveform_fraction leaves no space for the volume")
 
     sampling = _prepare_mode_volume_sampling(
         waveform,
@@ -2697,6 +2717,7 @@ def render_mode_frame(
         starfield=starfield,
         star_count=star_count,
         source_marker=source_marker and not show_bodies,
+        render_credit=False,
     )
     _add_source_overlays(
         plotter,
@@ -2722,7 +2743,7 @@ def render_mode_frame(
             waveform,
             start_time=panel_start,
             end_time=panel_end,
-            width=total_width * image_scale,
+            width=window_size[0] * image_scale,
             height=panel_height * image_scale,
             theta=waveform_theta,
             phi=waveform_phi,
@@ -2730,7 +2751,7 @@ def render_mode_frame(
             font_style=waveform_font_style,
             style_file=waveform_style_file,
             background_color=resolved_presentation.background_color,
-            transparent=transparent_panel,
+            transparent=waveform_transparent,
         )
         if show_waveform
         else None
@@ -2746,6 +2767,8 @@ def render_mode_frame(
         if waveform_panel is not None:
             panel = waveform_panel.render(frame)
             image = _combine_frame_and_panel(image, panel)
+        if footer is not None:
+            image = np.vstack((image, footer))
         imageio.imwrite(output, image)
     finally:
         plotter.close()
@@ -2817,6 +2840,7 @@ def render_mode_animation(
     waveform_fraction: float = 0.22,
     waveform_theta: float = np.pi / 3.0,
     waveform_phi: float = 0.0,
+    render_credit: bool = True,
     waveform_glow: bool = False,
     waveform_font_style: WaveformFontStyle = "latex",
     waveform_style_file: Optional[PathLike] = None,
@@ -2953,20 +2977,10 @@ def render_mode_animation(
         _validate_frame_window(time, float(normalization_frame), max_delay)
     frame_times = np.linspace(start, end, frames)
 
-    total_width, total_height = window_size
-    panel_height = (
-        int(round(total_height * waveform_fraction / 2.0) * 2)
-        if show_waveform
-        else 0
+    main_window_size, panel_height, footer = _frame_layout(
+        window_size, waveform_fraction, show_waveform, waveform_transparent,
+        render_credit, image_scale, resolved_presentation.background_color,
     )
-    transparent_panel = show_waveform and waveform_transparent
-    # A transparent panel is composited over a full-height scene render so the
-    # background shows through it; an opaque panel is stacked below a shorter
-    # scene render, so that render loses the panel's height.
-    main_height = total_height if transparent_panel else total_height - panel_height
-    main_window_size = (total_width, main_height)
-    if min(main_window_size) <= 0:
-        raise ValueError("waveform_fraction leaves no space for the volume")
 
     sampling = _prepare_mode_volume_sampling(
         waveform,
@@ -3074,6 +3088,7 @@ def render_mode_animation(
         starfield=starfield,
         star_count=star_count,
         source_marker=source_marker and not show_bodies,
+        render_credit=False,
     )
     grid = plotter._fewview_volume_grid
     render_name = plotter._fewview_render_name
@@ -3113,7 +3128,7 @@ def render_mode_animation(
             waveform,
             start_time=global_start,
             end_time=global_end,
-            width=total_width * image_scale,
+            width=window_size[0] * image_scale,
             height=panel_height * image_scale,
             theta=waveform_theta,
             phi=waveform_phi,
@@ -3121,7 +3136,7 @@ def render_mode_animation(
             font_style=waveform_font_style,
             style_file=waveform_style_file,
             background_color=resolved_presentation.background_color,
-            transparent=transparent_panel,
+            transparent=waveform_transparent,
         )
         if show_waveform
         else None
@@ -3290,6 +3305,8 @@ def render_mode_animation(
             if waveform_panel is not None:
                 panel = waveform_panel.render(float(frame_time))
                 image = _combine_frame_and_panel(image, panel)
+            if footer is not None:
+                image = np.vstack((image, footer))
             writer.append_data(image)
     finally:
         writer.close()

@@ -191,6 +191,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--source-marker", action=argparse.BooleanOptionalAction, default=False
     )
     display.add_argument("--show", action="store_true")
+    parser.add_argument(
+        "--render-credit", action=argparse.BooleanOptionalAction, default=True,
+        help="include the FEWview software credit in the output",
+    )
     return parser
 
 
@@ -286,7 +290,9 @@ def main(argv: list[str] | None = None) -> int:
         normalize=not args.raw_strain,
     )
 
-    slice_figure, _ = plot_volume_slice(volume, component="plus", plane="xz")
+    slice_figure, _ = plot_volume_slice(
+        volume, component="plus", plane="xz", render_credit=args.render_credit
+    )
     slice_path = args.output_dir / "relativistic-volume-slice.png"
     slice_figure.savefig(slice_path, dpi=180, bbox_inches="tight")
 
@@ -305,6 +311,7 @@ def main(argv: list[str] | None = None) -> int:
             color_exposure=args.color_exposure,
             background_color=args.background_color,
             screenshot=render_path,
+            render_credit=args.render_credit,
             show=args.show,
             opacity=args.opacity,
             shell_count=args.shell_count,

@@ -80,6 +80,7 @@ RENDER_KEYS = (
     "orbit_display_radius",
     "waveform_fraction",
     "waveform_glow",
+    "render_credit",
     "waveform_font_style",
     "waveform_style_file",
 )
@@ -403,6 +404,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-name",
         default="relativistic-emri-animation.mp4",
     )
+    parser.add_argument(
+        "--render-credit", action=argparse.BooleanOptionalAction, default=True,
+        help="include the FEWview software credit in the output",
+    )
     return parser
 
 
@@ -500,6 +505,7 @@ def _worker_arguments(
         if args.waveform_transparent
         else "--no-waveform-transparent",
     ]
+    values.append("--render-credit" if args.render_credit else "--no-render-credit")
     if args.source_glow:
         values.append("--source-glow")
     if args.waveform_glow:
@@ -535,7 +541,7 @@ def _run_fingerprint(args, render_keys, modes, mode_stat):
     # Omit disabled glow flags so renders from before each option can resume.
     render_keys = tuple(
         key for key in render_keys
-        if key not in ("source_glow", "waveform_glow") or getattr(args, key)
+        if key not in ("source_glow", "waveform_glow", "render_credit") or getattr(args, key)
     )
     fingerprint_source = repr(
         (

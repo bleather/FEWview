@@ -75,6 +75,10 @@ retarded-time window, polarisation and viewing angle.
 [Model and API guide](https://github.com/bleather/FEWview/blob/main/docs/reference.md) ·
 [Rendering on Slurm](https://github.com/bleather/FEWview/blob/main/docs/cluster_rendering.md)
 
+FEWview adds its wordmark and “© Benjamin Leather” to figures and movies by default.
+This credits the rendering software. Use `--no-render-credit` on the command line
+or `render_credit=False` in Python to omit the footer.
+
 ## Citation
 
 If you use FEWview to make a figure or movie for a paper, please cite the
