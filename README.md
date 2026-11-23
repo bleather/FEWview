@@ -1,5 +1,8 @@
 <h1>
-  <img src="https://raw.githubusercontent.com/bleather/FEWview/main/docs/img/icons/FEWview-192.png" width="56" height="56" align="absmiddle" alt=""> FEWview
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/bleather/FEWview/main/docs/img/FEWview-on-dark.png">
+    <img src="https://raw.githubusercontent.com/bleather/FEWview/main/docs/img/FEWview-on-light.png" width="320" alt="FEWview">
+  </picture>
 </h1>
 
 FEWview renders the gravitational waves from an extreme mass-ratio inspiral.
