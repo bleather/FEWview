@@ -38,3 +38,10 @@ slice and mode archive.
 - [Generate the modes, choose a time window and render a movie in Python](tutorial.md)
 - [Look up waveform models, units, data products and commands](reference.md)
 - [Split a long animation across a Slurm array](cluster_rendering.md)
+
+## Project artwork
+
+Use the wordmark on a [light background](img/FEWview-on-light.svg) or a
+[dark background](img/FEWview-on-dark.svg), or use the [symbol](img/FEWview-symbol.svg)
+where space is limited. The installed Python package includes the SVGs, PNGs,
+icons and [DM Sans font licence](img/DM-Sans-OFL.txt) under `fewview/brand/`.

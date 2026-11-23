@@ -8,7 +8,7 @@ description = "Full-sky visualisations of extreme mass-ratio inspirals with Fast
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "docs/img/DM-Sans-OFL.txt"]
 authors = [{ name = "Ben Leather" }]
 keywords = [
     "gravitational-waves",
@@ -61,8 +61,11 @@ path = "src/fewview/_version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/fewview"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"docs/img" = "fewview/brand"
+
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/tests", "/docs", "/mkdocs.yml", "/README.md", "/LICENSE", "/pyproject.toml"]
+include = ["/src", "/tests", "/docs", "/mkdocs-overrides", "/mkdocs.yml", "/README.md", "/LICENSE", "/pyproject.toml"]
 
 [tool.pytest.ini_options]
 addopts = "-m 'not few_data'"
