@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fewview.cli import cluster_job, cluster_segment
+from fewview.cli import cluster_job, cluster_merge, cluster_segment
 
 
 class ClusterCameraFlagTests(unittest.TestCase):
@@ -90,22 +90,6 @@ class ClusterCameraFlagTests(unittest.TestCase):
             )
             self.assertTrue(segment.waveform_glow)
 
-    def test_credited_jobs_use_new_segments_and_uncredited_jobs_can_resume(self):
-        modes = Path("modes.npz")
-        stat = Path(__file__).stat()
-        keys = cluster_job.RENDER_KEYS
-        previous_keys = tuple(key for key in keys if key != "render_credit")
-        default = self._job_args([])
-        plain = self._job_args(["--no-render-credit"])
-        fingerprint = cluster_job._run_fingerprint
-        previous = fingerprint(plain, previous_keys, modes, stat)
-        self.assertEqual(fingerprint(plain, keys, modes, stat), previous)
-        self.assertNotEqual(fingerprint(default, keys, modes, stat), previous)
-        for job in (plain, default):
-            worker = cluster_job._worker_arguments(job, modes, Path("segs"))
-            segment = cluster_segment.build_parser().parse_args(worker + ["--segment-index", "0"])
-            self.assertEqual(segment.render_credit, job.render_credit)
-
     def test_camera_flight_settings_change_the_run_fingerprint(self):
         # Different camera options must produce a different run fingerprint,
         # so re-runs do not reuse another shot's completed segments.
@@ -125,6 +109,14 @@ class ClusterCameraFlagTests(unittest.TestCase):
                 loop, cluster_job.RENDER_KEYS, modes, mode_stat
             )
             self.assertNotEqual(fp_base, fp_loop)
+
+    def test_merge_catches_segments_from_before_the_aligned_credit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            (folder / "segment_0000.mp4").touch()
+            (folder / "segment_0000.done").write_text("complete\n", encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "Render segment_0000 again"):
+                cluster_merge.main([tmp, str(folder / "movie.mp4"), "--segments", "1"])
 
 
 if __name__ == "__main__":

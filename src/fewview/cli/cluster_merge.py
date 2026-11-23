@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from fewview.cli import SEGMENT_RENDER_VERSION
+
 
 def _ffmpeg_concat_path(path: Path) -> str:
     return str(path.resolve()).replace("'", "'\\''")
@@ -42,6 +44,10 @@ def main(argv: list[str] | None = None) -> int:
     if missing:
         formatted = "\n  ".join(missing)
         raise SystemExit(f"Cannot merge; files are missing:\n  {formatted}")
+
+    for marker in marker_files:
+        if marker.read_text(encoding="utf-8").strip() != SEGMENT_RENDER_VERSION:
+            raise SystemExit(f"Render {marker.stem} again with the current FEWview before merging.")
 
     import imageio_ffmpeg
 

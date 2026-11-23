@@ -23,6 +23,7 @@ from fewview import (
 )
 
 from fewview._archive import load_mode_waveform
+from fewview.cli import SEGMENT_RENDER_VERSION
 
 LOGGER = logging.getLogger("fewview.cli.cluster_segment")
 
@@ -184,10 +185,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="rerender a segment even when its completion marker exists",
     )
-    parser.add_argument(
-        "--render-credit", action=argparse.BooleanOptionalAction, default=True,
-        help="include the FEWview software credit in the output",
-    )
+    parser.add_argument("--render-credit", action="store_true", help=argparse.SUPPRESS)
     return parser
 
 
@@ -206,7 +204,11 @@ def main(argv: list[str] | None = None) -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     output = args.output_dir / f"segment_{segment_index:04d}.mp4"
     complete = args.output_dir / f"segment_{segment_index:04d}.done"
-    if complete.exists() and output.exists() and not args.force:
+    # Older segments may have been rendered without the software credit.
+    if (
+        not args.force and output.is_file() and complete.is_file()
+        and complete.read_text(encoding="utf-8").strip() == SEGMENT_RENDER_VERSION
+    ):
         LOGGER.info("Segment %d is already complete; skipping", segment_index)
         return 0
 
@@ -306,7 +308,6 @@ def main(argv: list[str] | None = None) -> int:
         source_glow=args.source_glow,
         orbit_display_radius=args.orbit_display_radius,
         waveform_fraction=args.waveform_fraction,
-        render_credit=args.render_credit,
         waveform_glow=args.waveform_glow,
         waveform_font_style=args.waveform_font_style,
         waveform_style_file=args.waveform_style_file,
@@ -315,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
         normalization_time=args.normalization_time,
         normalization_samples=args.normalization_samples,
     )
-    complete.write_text("complete\n", encoding="utf-8")
+    complete.write_text(SEGMENT_RENDER_VERSION + "\n", encoding="utf-8")
     LOGGER.info("Wrote %s", output)
     return 0
 

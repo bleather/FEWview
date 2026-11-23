@@ -8,6 +8,12 @@ from matplotlib.colors import to_rgb
 from PIL import Image, ImageDraw, ImageFont
 
 
+# In both supplied SVGs the wordmark baseline is y=166, scaled by 1.9
+# and translated down 10 units in a 500-unit-high viewBox.
+_WORDMARK_BASELINE = (166 * 1.9 + 10) / 500
+_RIGHT_EDGE = 0.985
+
+
 def _light_background(color):
     red, green, blue = to_rgb(color)
     return 0.299 * red + 0.587 * green + 0.114 * blue > 0.55
@@ -30,8 +36,11 @@ def _credit_image(light_background):
     prefix, owner = "Rendered by", "Benjamin Leather"
     ink = "#26313c" if light_background else "#e6ebf2"
     with Image.open(artwork) as source:
-        mark = source.convert("RGBA").crop(source.getbbox())
+        bounds = source.getbbox()
+        mark = source.convert("RGBA").crop(bounds)
+        baseline_in_crop = _WORDMARK_BASELINE * source.height - bounds[1]
     mark_height = 210
+    baseline = round(baseline_in_crop * mark_height / mark.height)
     mark = mark.resize((round(mark.width * mark_height / mark.height), mark_height),
                        Image.Resampling.LANCZOS)
     gap = round(roman.getlength(" "))
@@ -41,10 +50,9 @@ def _credit_image(light_background):
     image = Image.new("RGBA", (owner_x + round(roman.getlength(owner)) + 3, mark_height))
     image.alpha_composite(mark, (mark_x, 0))
     draw = ImageDraw.Draw(image)
-    baseline = mark_height // 2 + 30
     for x, text, font in ((0, prefix, roman), (symbol_x, "©", symbol), (owner_x, owner, roman)):
         draw.text((x, baseline), text, font=font, fill=ink, anchor="ls")
-    return image
+    return image.crop(image.getbbox())
 
 
 def _display_width(width, height):
@@ -62,7 +70,7 @@ def add_figure_credit(figure):
     credit = AnnotationBbox(
         OffsetImage(np.asarray(image), zoom=display_width / image.width,
                     interpolation="hanning", resample=True),
-        (0.985, 0.012), xycoords=figure.transFigure, box_alignment=(1, 0),
+        (_RIGHT_EDGE, 0.012), xycoords=figure.transFigure, box_alignment=(1, 0),
         frameon=False, pad=0, annotation_clip=False,
     )
     credit.set_gid("fewview-render-credit")
@@ -76,7 +84,7 @@ def add_volume_credit(plotter, width, height, background):
     display_width = _display_width(width, height)
     size = (display_width / width, display_width * image.height / image.width / height)
     widget = plotter.add_logo_widget(
-        pv.Texture(np.asarray(image)).to_image(), position=(0.985 - size[0], 0.018), size=size,
+        pv.Texture(np.asarray(image)).to_image(), position=(_RIGHT_EDGE - size[0], 0.018), size=size,
     )
     widget.GetRepresentation().SetShowBorderToOff()
     widget.ProcessEventsOff()
@@ -92,5 +100,5 @@ def credit_strip(width, height, scale, background):
     strip = Image.new("RGB", (width * scale, rows * scale),
                       tuple(round(255 * value) for value in to_rgb(background)))
     text = image.resize((text_width, text_height), Image.Resampling.LANCZOS)
-    strip.paste(text, (max(0, strip.width - text_width - padding), padding), text)
+    strip.paste(text, (round(_RIGHT_EDGE * strip.width) - text_width, padding), text)
     return np.asarray(strip)

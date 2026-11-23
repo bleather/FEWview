@@ -247,10 +247,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="optional Matplotlib .mplstyle file for the waveform panel",
     )
-    parser.add_argument(
-        "--render-credit", action=argparse.BooleanOptionalAction, default=True,
-        help="include the FEWview software credit in the output",
-    )
     return parser
 
 
@@ -346,7 +342,6 @@ def main(argv: list[str] | None = None) -> int:
         orbit_display_radius=args.orbit_size,
         body_exaggeration=args.body_exaggeration,
         waveform_fraction=args.waveform_height,
-        render_credit=args.render_credit,
         waveform_glow=args.waveform_glow,
         waveform_transparent=args.waveform_transparent,
         waveform_font_style=args.waveform_font_style,

@@ -1349,7 +1349,6 @@ def plot_strain_surface(
     *,
     ax=None,
     cmap: str = "coolwarm",
-    render_credit: bool = True,
     colorbar: bool = True,
     view_elevation: float = 34.0,
     view_azimuth: float = -58.0,
@@ -1376,8 +1375,7 @@ def plot_strain_surface(
             surface, ax=ax, cmap=cmap, colorbar=colorbar,
             view_elevation=view_elevation, view_azimuth=view_azimuth,
         )
-        if render_credit:
-            add_figure_credit(figure)
+        add_figure_credit(figure)
         return figure, ax
 
 
@@ -1434,7 +1432,6 @@ def plot_volume_slice(
     plane: Literal["xy", "xz", "yz"] = "xz",
     ax=None,
     cmap: str = "coolwarm",
-    render_credit: bool = True,
     colorbar: bool = True,
 ):
     """Plot a central slice through a retarded-time volume with Matplotlib.
@@ -1457,8 +1454,7 @@ def plot_volume_slice(
         figure, ax = _plot_volume_slice_body(
             volume, component=component, plane=plane, ax=ax, cmap=cmap, colorbar=colorbar
         )
-        if render_credit:
-            add_figure_credit(figure)
+        add_figure_credit(figure)
         return figure, ax
 
 
@@ -1765,7 +1761,6 @@ def render_volume(
     star_count: Optional[int] = None,
     source_marker: bool = False,
     show_scalar_bar: bool = False,
-    render_credit: bool = True,
 ):
     """Render a retarded-time volume using PyVista's GPU ray caster.
 
@@ -1845,6 +1840,89 @@ def render_volume(
         The configured ``pyvista.Plotter``.
     """
 
+    if image_scale < 1:
+        raise ValueError("image_scale must be at least 1")
+    plotter = _build_volume_scene(
+        volume,
+        component=component,
+        show=show,
+        style=style,
+        opacity_profile=opacity_profile,
+        color_scheme=color_scheme,
+        presentation=presentation,
+        color_exposure=color_exposure,
+        background_color=background_color,
+        opacity=opacity,
+        shell_count=shell_count,
+        shell_min=shell_min,
+        shell_max=shell_max,
+        shell_width=shell_width,
+        shell_opacity_floor=shell_opacity_floor,
+        shell_glow=shell_glow,
+        flux_gamma=flux_gamma,
+        flux_threshold=flux_threshold,
+        smooth_sigma=smooth_sigma,
+        opacity_unit_distance=opacity_unit_distance,
+        window_size=window_size,
+        camera_view=camera_view,
+        camera_zoom=camera_zoom,
+        camera_azimuth=camera_azimuth,
+        camera_elevation=camera_elevation,
+        camera_latitude=camera_latitude,
+        camera_longitude=camera_longitude,
+        starfield=starfield,
+        star_count=star_count,
+        source_marker=source_marker,
+        show_scalar_bar=show_scalar_bar,
+    )
+    add_volume_credit(plotter, *window_size, plotter.background_color.float_rgb)
+    screenshot_path = None if screenshot is None else str(Path(screenshot))
+    if show:
+        plotter.show(auto_close=False)
+        if screenshot_path is not None:
+            plotter.screenshot(screenshot_path, scale=image_scale)
+    elif screenshot_path is not None:
+        plotter.show(auto_close=False)
+        plotter.screenshot(screenshot_path, scale=image_scale)
+    return plotter
+
+
+def _build_volume_scene(
+    volume: RetardedTimeVolume,
+    *,
+    component: VolumeComponent = "plus",
+    show: bool = True,
+    style: VolumeRenderStyle = "cinematic",
+    opacity_profile: VolumeOpacityProfile = "soft",
+    color_scheme: VolumeColorScheme = "magma",
+    presentation: VolumePresentation = "balanced",
+    color_exposure: Optional[float] = None,
+    background_color: Optional[str] = None,
+    opacity: Optional[float] = None,
+    shell_count: int = 7,
+    shell_min: float = 0.10,
+    shell_max: float = 0.92,
+    shell_width: float = 0.075,
+    shell_opacity_floor: float = 0.16,
+    shell_glow: float = 0.12,
+    flux_gamma: float = 0.6,
+    flux_threshold: float = 0.35,
+    smooth_sigma: float = 0.65,
+    opacity_unit_distance: Optional[float] = None,
+    window_size: tuple[int, int] = (1600, 900),
+    camera_view: VolumeCameraView = "oblique",
+    camera_zoom: Optional[float] = None,
+    camera_azimuth: float = 0.0,
+    camera_elevation: float = 0.0,
+    camera_latitude: Optional[float] = None,
+    camera_longitude: Optional[float] = None,
+    starfield: Optional[bool] = None,
+    star_count: Optional[int] = None,
+    source_marker: bool = False,
+    show_scalar_bar: bool = False,
+):
+    """Prepare the volume layer shared by standalone and composited renders."""
+
     opacity = _resolve_opacity(opacity, opacity_profile)
     if not 0.0 < opacity <= 1.0:
         raise ValueError("opacity must be in the interval (0, 1]")
@@ -1871,8 +1949,6 @@ def render_volume(
     )
     if len(window_size) != 2 or min(window_size) <= 0:
         raise ValueError("window_size must contain two positive integers")
-    if image_scale < 1:
-        raise ValueError("image_scale must be at least 1")
     grid = to_pyvista(volume)
     import pyvista as pv
 
@@ -2000,17 +2076,6 @@ def render_volume(
     plotter.camera.zoom(resolved_presentation.camera_zoom)
     _apply_camera_offset(plotter, camera_azimuth, camera_elevation)
 
-    if render_credit:
-        add_volume_credit(plotter, *window_size, resolved_presentation.background_color)
-
-    screenshot_path = None if screenshot is None else str(Path(screenshot))
-    if show:
-        plotter.show(auto_close=False)
-        if screenshot_path is not None:
-            plotter.screenshot(screenshot_path, scale=image_scale)
-    elif screenshot_path is not None:
-        plotter.show(auto_close=False)
-        plotter.screenshot(screenshot_path, scale=image_scale)
     plotter._fewview_volume_grid = grid
     plotter._fewview_render_name = render_name
     plotter._fewview_volume_actor = volume_actor
@@ -2473,14 +2538,14 @@ class _WaveformPanelRenderer:
 
 
 def _frame_layout(window_size, waveform_fraction, show_waveform, waveform_transparent,
-                  render_credit, image_scale, background):
+                  image_scale, background):
     """Allocate rows to the scene, waveform and credit at the requested size."""
     width, height = window_size
     if min(window_size) <= 0:
         raise ValueError("window dimensions must be positive")
     panel_height = round(height * waveform_fraction / 2) * 2 if show_waveform else 0
-    footer = credit_strip(width, height, image_scale, background) if render_credit else None
-    content_height = height if footer is None else height - footer.shape[0] // image_scale
+    footer = credit_strip(width, height, image_scale, background)
+    content_height = height - footer.shape[0] // image_scale
     scene_height = content_height if waveform_transparent else content_height - panel_height
     if scene_height <= 0 or content_height < panel_height:
         raise ValueError("window height is too small for the waveform and credit")
@@ -2573,7 +2638,6 @@ def render_mode_frame(
     waveform_fraction: float = 0.22,
     waveform_theta: float = np.pi / 3.0,
     waveform_phi: float = 0.0,
-    render_credit: bool = True,
     waveform_glow: bool = False,
     waveform_font_style: WaveformFontStyle = "latex",
     waveform_style_file: Optional[PathLike] = None,
@@ -2643,7 +2707,7 @@ def render_mode_frame(
 
     main_window_size, panel_height, footer = _frame_layout(
         window_size, waveform_fraction, show_waveform, waveform_transparent,
-        render_credit, image_scale, resolved_presentation.background_color,
+        image_scale, resolved_presentation.background_color,
     )
 
     sampling = _prepare_mode_volume_sampling(
@@ -2687,7 +2751,7 @@ def render_mode_frame(
         model=waveform.model,
         mode_count=waveform.modes.shape[1],
     )
-    plotter = render_volume(
+    plotter = _build_volume_scene(
         volume,
         component=component,
         show=False,
@@ -2717,7 +2781,6 @@ def render_mode_frame(
         starfield=starfield,
         star_count=star_count,
         source_marker=source_marker and not show_bodies,
-        render_credit=False,
     )
     _add_source_overlays(
         plotter,
@@ -2767,8 +2830,7 @@ def render_mode_frame(
         if waveform_panel is not None:
             panel = waveform_panel.render(frame)
             image = _combine_frame_and_panel(image, panel)
-        if footer is not None:
-            image = np.vstack((image, footer))
+        image = np.vstack((image, footer))
         imageio.imwrite(output, image)
     finally:
         plotter.close()
@@ -2840,7 +2902,6 @@ def render_mode_animation(
     waveform_fraction: float = 0.22,
     waveform_theta: float = np.pi / 3.0,
     waveform_phi: float = 0.0,
-    render_credit: bool = True,
     waveform_glow: bool = False,
     waveform_font_style: WaveformFontStyle = "latex",
     waveform_style_file: Optional[PathLike] = None,
@@ -2979,7 +3040,7 @@ def render_mode_animation(
 
     main_window_size, panel_height, footer = _frame_layout(
         window_size, waveform_fraction, show_waveform, waveform_transparent,
-        render_credit, image_scale, resolved_presentation.background_color,
+        image_scale, resolved_presentation.background_color,
     )
 
     sampling = _prepare_mode_volume_sampling(
@@ -3058,7 +3119,7 @@ def render_mode_animation(
             if normalization_field is not first_field:
                 del normalization_field
         render_scale = max(render_scales)
-    plotter = render_volume(
+    plotter = _build_volume_scene(
         first_volume,
         component=component,
         show=False,
@@ -3088,7 +3149,6 @@ def render_mode_animation(
         starfield=starfield,
         star_count=star_count,
         source_marker=source_marker and not show_bodies,
-        render_credit=False,
     )
     grid = plotter._fewview_volume_grid
     render_name = plotter._fewview_render_name
@@ -3305,8 +3365,7 @@ def render_mode_animation(
             if waveform_panel is not None:
                 panel = waveform_panel.render(float(frame_time))
                 image = _combine_frame_and_panel(image, panel)
-            if footer is not None:
-                image = np.vstack((image, footer))
+            image = np.vstack((image, footer))
             writer.append_data(image)
     finally:
         writer.close()

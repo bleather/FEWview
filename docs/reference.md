@@ -65,8 +65,6 @@ The plotting and rendering functions include a footer reading “Rendered by
 FEWview © Benjamin Leather”. FEWview appears as its transparent wordmark, with
 the surrounding text in Computer Modern. The notice identifies the software
 and its author. Ownership of the rendered figure or movie is a separate matter.
-Set `render_credit=False` to omit it. The still, animation and Slurm rendering
-commands accept `--no-render-credit`.
 
 ## Command-line tools
 

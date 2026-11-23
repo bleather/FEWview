@@ -81,6 +81,7 @@ Set `--partition` to your cluster's GPU partition name (the default is `gpu`).
 Add `--preemptible` if that partition can preempt jobs: it adds
 `#SBATCH --requeue`, and because each finished segment leaves a completion
 marker, a requeued task skips the segments it already rendered.
+Segments from before the aligned wordmark footer must be rendered again before merging.
 
 For a fuller flux (energy-flux) movie instead of signed strain, add:
 
