@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - run: python -m pip install build twine 'mkdocs>=1.6,<2'
+      - run: python -m pip install build twine -r docs/requirements.txt
       - run: python -m build
       - run: python -m twine check --strict dist/*
       - run: python -m mkdocs build --strict
