@@ -72,9 +72,9 @@ available fields and the [Slurm guide](cluster_rendering.md) covers long movies.
 
 ## Citation
 
-If you use FEWview for a figure or movie, cite the release you used. For v0.2.1, use this reference.
+If you use FEWview for a figure or movie, cite the release you used. For v0.2.2, use this reference.
 
-> Leather, B. (2026). *FEWview* (v0.2.1) [Software]. [GitHub release](https://github.com/bleather/FEWview/releases/tag/v0.2.1).
+> Leather, B. (2026). *FEWview* (v0.2.2) [Software]. [GitHub release](https://github.com/bleather/FEWview/releases/tag/v0.2.2).
 
 For BibTeX, select **Cite this repository** on the [GitHub repository](https://github.com/bleather/FEWview).
 Please also cite FEW and the waveform model you used. [FEW citation guide](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms#citation)
