@@ -1,7 +1,7 @@
 # Python tutorial
 
 This walkthrough renders a still and a short movie from a FEW EMRI waveform. The [example notebook](https://github.com/bleather/FEWview/blob/main/examples/tutorial.ipynb)
-contains executable versions of the figures. Follow the [installation instructions](index.md)
+explores other palettes for the same rendering functions. Follow the [installation instructions](index.md#installation)
 before running the examples below.
 
 ## 1. Generate a waveform
@@ -32,7 +32,9 @@ edge. `choose_max_delay` picks a span holding a resolvable number of wave
 cycles; a small number keeps the shells cleanly separated.
 
 ```python
-reference = waveform.strain(theta=np.pi / 3.0, phi=0.0)
+latitude, longitude = 18.0, -35.0
+theta, phi = np.deg2rad([90.0 - latitude, longitude])
+reference = waveform.strain(theta=theta, phi=phi)
 h_plus, h_cross = np.real(reference), -np.imag(reference)
 
 period = fv.estimate_waveform_period(waveform.time, h_plus, h_cross)
@@ -42,14 +44,11 @@ end = float(waveform.time[-1])
 
 ## 3. Render a still
 
-`render_mode_frame` builds the volume for one instant and renders it. Three
-choices set the look:
-
-- **`component`** — `plus` has no equatorial node and is the usual choice.
-- **`opacity_profile`** — `shells` draws nested translucent signed-strain
-  sheets.
-- **`color_scheme`** — `rainbow`, a smooth blue-to-red sequence tuned for the
-  shells.
+The [opening figure](index.md) uses ice-blue shells for the plus polarisation.
+To get that view, set the camera latitude to 18° above the orbital plane
+and its longitude to −35°. The panel takes polar angle and azimuth in radians.
+Use the same `theta` and `phi` as in the previous step to plot the strain
+along the camera’s line of sight.
 
 ```python
 fv.render_mode_frame(
@@ -57,39 +56,41 @@ fv.render_mode_frame(
     screenshot="tutorial-shells.png",
     max_delay=max_delay,
     frame_time=end,
-    waveform_start_time=end - 8 * period,
-    waveform_end_time=end,
+    waveform_start_time=max(float(waveform.time[0]), end - 3600.0),
+    waveform_end_time=end, waveform_theta=theta, waveform_phi=phi,
     resolution=200,
     component="plus",
     opacity_profile="shells",
-    color_scheme="rainbow",
+    color_scheme="ice",
     presentation="shells_dramatic",
     opacity=0.30,
-    camera_view="oblique",
+    camera_latitude=latitude, camera_longitude=longitude,
     camera_zoom=0.95,
     shell_count=7, shell_min=0.10, shell_max=0.92,
     smooth_sigma=1.2,
     inner_window_fraction=0.10, outer_window_fraction=0.10,
-    trajectory_color="#00b7ff",
+    source_glow=True, trajectory_color="#33baff",
+    waveform_glow=True, waveform_transparent=False,
     window_size=(1000, 620),
 )
 ```
 
-The central bodies are drawn on the scale of the orbit. The fading trail
-marks the recent trajectory of the secondary. Set `trajectory_color` to any
-Matplotlib colour. For a rim-lit horizon marker and a glowing 3D trail, use
-`source_glow=True, trajectory_color="#33baff"` in a frame or movie, or pass
-`--source-glow --trajectory-color "#33baff"` to the animation CLI. The trail
-is a tube in scene coordinates, so the camera can see it pass behind the
-primary. In this style, `trajectory_line_width` scales the tube radius with
-the displayed orbit. Lighting and glow are illustrative.
+The central bodies are drawn on the scale of the orbit. The fading cyan
+trail follows the secondary’s recent trajectory. `source_glow=True` lights
+the edge of the central black hole and draws the trail as a tube that can pass
+behind it. Increase `body_exaggeration` to make the horizon marker larger
+relative to the orbit. The lighting and marker size are for visibility.
+
+[![Ice-blue strain lobes curve around the secondary’s cyan orbital track.](images/ice-orbit-lobes.jpg)](images/ice-orbit-lobes.jpg)
+
+This frame from an eccentric Kerr movie shows how the translucent lobes
+overlap along an oblique line of sight.
 
 ## 4. A different look: face-on
 
 `camera_view="face_on"` looks straight down the spin axis, revealing the spiral
-wavefront pattern. Any palette works; `cool` gives a calm blue-to-magenta
-sequence. This is the same `shells` profile as before — only the camera and
-colours change.
+wavefront pattern. This example keeps the `shells` profile and uses the
+blue-to-magenta `cool` palette.
 
 ```python
 fv.render_mode_frame(
@@ -104,6 +105,8 @@ fv.render_mode_frame(
     trajectory_color="#00b7ff", window_size=(760, 760),
 )
 ```
+
+![A face-on view along the spin axis shows a spiral in the plus polarisation.](images/gallery-cool-faceon.png)
 
 ## 5. A different field: energy flux
 
@@ -129,7 +132,9 @@ fv.render_mode_frame(
 )
 ```
 
-Two knobs tune the flux look: `flux_threshold` sets how bright a crest must be
+![Oblique view of the energy flux proxy in the plasma palette.](images/gallery-flux-plasma.png)
+
+Two settings control the flux display. `flux_threshold` sets how bright a crest must be
 before it becomes solid (raise it to isolate the brightest lobes), and
 `flux_gamma` lifts the dim inter-crest flux into the bright half of the colour
 map. The defaults (`0.35` and `0.6`) are tuned for these EMRI fluxes.
@@ -155,17 +160,20 @@ not flicker.
 
 ```python
 anim_end = end
-anim_start = max(float(waveform.time[0] + max_delay), anim_end - 3.0 * period)
+anim_start = max(float(waveform.time[0] + max_delay), anim_end - 2.0 * period)
 
 fv.render_mode_animation(
     waveform, "tutorial.mp4",
     max_delay=max_delay, start_time=anim_start, end_time=anim_end,
-    frames=24, fps=12, resolution=110,
-    component="plus", opacity_profile="shells", color_scheme="rainbow",
+    frames=48, fps=24, resolution=110,
+    component="plus", opacity_profile="shells", color_scheme="ice",
     presentation="shells_dramatic", opacity=0.30, camera_zoom=0.95,
     shell_count=7, smooth_sigma=1.2,
     inner_window_fraction=0.10, outer_window_fraction=0.10,
-    trajectory_color="#00b7ff", show_waveform=True,
+    camera_latitude=latitude, camera_longitude=longitude,
+    show_bodies=True, show_trajectory=True, source_glow=True, trajectory_color="#33baff",
+    show_waveform=True, waveform_theta=theta, waveform_phi=phi,
+    waveform_glow=True, waveform_transparent=False,
     window_size=(640, 400), normalization_samples=3,
 )
 ```
