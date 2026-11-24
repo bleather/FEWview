@@ -20,10 +20,10 @@ along that line of sight. The shaded interval is the cycle pictured above.
 
 Use Python 3.12 or later. On macOS, FEW supplies wheels for Apple Silicon
 (macOS 14 or later). Use a native arm64 Python environment there.
-To install the current GitHub release, run
+To install FEWview from PyPI, run
 
 ```bash
-python -m pip install https://github.com/bleather/FEWview/releases/download/v0.2.0/fewview-0.2.0-py3-none-any.whl
+python -m pip install fewview
 ```
 
 For the development version, run the following command or use
@@ -83,9 +83,9 @@ Use `--logo icon` (or `logo="icon"` in Python) for the orbit symbol alone.
 ## Citation
 
 If you use FEWview to make a figure or movie for a paper, please cite the
-version you used. For v0.2.0, use the following reference.
+version you used. For v0.2.1, use the following reference.
 
-> Leather, B. (2026). *FEWview* (v0.2.0) [Software]. [GitHub release](https://github.com/bleather/FEWview/releases/tag/v0.2.0).
+> Leather, B. (2026). *FEWview* (v0.2.1) [Software]. [GitHub release](https://github.com/bleather/FEWview/releases/tag/v0.2.1).
 
 For BibTeX, select **Cite this repository** on the GitHub repository page.
 Please also cite FastEMRIWaveforms and the waveform model you used to generate

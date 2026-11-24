@@ -39,7 +39,7 @@ module avail                      # find your cluster's conda/python module
 module load <conda-module>
 conda create -n fewview python=3.12
 conda activate fewview
-python -m pip install "git+https://github.com/bleather/FEWview.git"
+python -m pip install fewview
 ```
 
 The generated jobs activate this environment on each node. Pass

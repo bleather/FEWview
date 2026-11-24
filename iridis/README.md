@@ -12,7 +12,7 @@ with Iridis partition/account/module details and a fixed camera shot.
    module load <your-conda-module>      # `module avail` to find it
    conda create -n fewview python=3.12
    conda activate fewview
-   python -m pip install "git+https://github.com/bleather/FEWview.git"
+   python -m pip install fewview
    ```
 2. Copy across the mode file written locally by `fewview-render`:
    ```bash

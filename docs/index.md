@@ -10,10 +10,10 @@ The orbit drawn in the centre has a separate display scale.
 
 ## First render
 
-In a Python 3.12 or later environment, install the GitHub release with
+In a Python 3.12 or later environment, install FEWview from PyPI with
 
 ```bash
-python -m pip install https://github.com/bleather/FEWview/releases/download/v0.2.0/fewview-0.2.0-py3-none-any.whl
+python -m pip install fewview
 ```
 
 For the development version, run `python -m pip install .` from a checkout.
