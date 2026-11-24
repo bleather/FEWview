@@ -38,11 +38,9 @@ MAX_CONCURRENT=24                  # raise as high as your allocation allows
 # ---- assemble optional directives ----------------------------------------
 # Only pass --account / --module when set, so a blank value is omitted rather
 # than sent as an empty argument (an empty --module makes Lmod error).
-ACCOUNT_ARG=()
-[ -n "$ACCOUNT" ] && ACCOUNT_ARG=(--account "$ACCOUNT")
-
-MODULE_ARG=()
-[ -n "$CONDA_MODULE" ] && MODULE_ARG=(--module "$CONDA_MODULE")
+JOB_ARGS=(--partition "$PARTITION" --conda-env "$CONDA_ENV")
+[ -n "$ACCOUNT" ] && JOB_ARGS+=(--account "$ACCOUNT")
+[ -n "$CONDA_MODULE" ] && JOB_ARGS+=(--module "$CONDA_MODULE")
 
 if [ ! -f "$MODES" ]; then
     echo "Mode file not found: $MODES" >&2
@@ -59,8 +57,7 @@ fi
 # preemption: finished segments are skipped via their .done markers.
 fewview-cluster-job "$MODES" \
     --job-dir "$JOBDIR" \
-    --partition "$PARTITION" "${ACCOUNT_ARG[@]}" \
-    --conda-env "$CONDA_ENV" "${MODULE_ARG[@]}" \
+    "${JOB_ARGS[@]}" \
     --headless-backend egl \
     --segments "$SEGMENTS" --max-concurrent "$MAX_CONCURRENT" \
     --time 01:00:00 --memory 24G --cpus-per-task 4 \

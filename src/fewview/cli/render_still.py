@@ -188,6 +188,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--starfield", action=argparse.BooleanOptionalAction, default=None
     )
     display.add_argument("--star-count", type=int, default=None)
+    display.add_argument("--bodies", action=argparse.BooleanOptionalAction, default=True)
+    display.add_argument("--trajectory", action=argparse.BooleanOptionalAction, default=True)
     display.add_argument(
         "--source-marker", action=argparse.BooleanOptionalAction, default=False
     )
@@ -301,6 +303,9 @@ def main(argv: list[str] | None = None) -> int:
         render_path = args.output_dir / "relativistic-emri-volume.png"
         plotter = render_volume(
             volume,
+            waveform=waveform,
+            show_bodies=args.bodies,
+            show_trajectory=args.trajectory,
             component=args.render_component,
             style=args.render_style,
             opacity_profile=args.opacity_profile,

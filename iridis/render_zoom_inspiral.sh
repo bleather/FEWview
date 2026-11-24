@@ -39,9 +39,10 @@ ZOOM_START=0.9                     # wide at the start
 ZOOM_END=2.2                       # magnified at merger (larger = closer-in)
 
 # ---- assemble optional directives ----------------------------------------
-ACCOUNT_ARG=(); [ -n "$ACCOUNT" ] && ACCOUNT_ARG=(--account "$ACCOUNT")
-MODULE_ARG=();  [ -n "$CONDA_MODULE" ] && MODULE_ARG=(--module "$CONDA_MODULE")
-MERGE_ARG=();   [ -n "$MERGE_PARTITION" ] && MERGE_ARG=(--merge-partition "$MERGE_PARTITION")
+JOB_ARGS=(--partition "$PARTITION" --conda-env "$CONDA_ENV")
+[ -n "$ACCOUNT" ] && JOB_ARGS+=(--account "$ACCOUNT")
+[ -n "$CONDA_MODULE" ] && JOB_ARGS+=(--module "$CONDA_MODULE")
+[ -n "$MERGE_PARTITION" ] && JOB_ARGS+=(--merge-partition "$MERGE_PARTITION")
 
 if [ ! -f "$MODES" ]; then
     echo "Mode file not found: $MODES" >&2
@@ -51,8 +52,7 @@ fi
 
 fewview-cluster-job "$MODES" \
     --job-dir "$JOBDIR" \
-    --partition "$PARTITION" "${ACCOUNT_ARG[@]}" \
-    --conda-env "$CONDA_ENV" "${MODULE_ARG[@]}" "${MERGE_ARG[@]}" \
+    "${JOB_ARGS[@]}" \
     --headless-backend egl \
     --segments "$SEGMENTS" --max-concurrent "$MAX_CONCURRENT" \
     --time 01:00:00 --memory 24G --cpus-per-task 4 \

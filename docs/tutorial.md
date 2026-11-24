@@ -75,6 +75,8 @@ fv.render_mode_frame(
 )
 ```
 
+Stills and movies show the bodies and the orbital trail by default. Use
+`show_bodies=False` or `show_trajectory=False` to hide either layer.
 The central bodies are drawn on the scale of the orbit. The fading cyan
 trail follows the secondary’s recent trajectory. `source_glow=True` lights
 the edge of the central black hole and draws the trail as a tube that can pass
@@ -96,7 +98,7 @@ blue-to-magenta `cool` palette.
 fv.render_mode_frame(
     waveform, screenshot="tutorial-faceon.png",
     max_delay=max_delay, frame_time=end,
-    waveform_start_time=end - 8 * period, waveform_end_time=end,
+    show_waveform=False,
     resolution=200,
     component="plus", opacity_profile="shells", color_scheme="cool",
     presentation="shells_dramatic", opacity=0.30, camera_view="face_on", camera_zoom=1.1,
@@ -122,7 +124,7 @@ oblique camera, and the structure is strongest at higher eccentricity.
 fv.render_mode_frame(
     waveform, screenshot="tutorial-flux.png",
     max_delay=max_delay, frame_time=end,
-    waveform_start_time=end - 8 * period, waveform_end_time=end,
+    show_waveform=False,
     resolution=200,
     component="energy_flux", opacity_profile="flux", color_scheme="plasma",
     presentation="shells_dramatic", color_exposure=2.2,
@@ -159,13 +161,15 @@ angular basis across frames and holding the colour scale fixed so the movie does
 not flicker.
 
 ```python
+animation_cycles = 2
+frames = max(2, int(np.ceil(24 * animation_cycles)))
 anim_end = end
-anim_start = max(float(waveform.time[0] + max_delay), anim_end - 2.0 * period)
+anim_start = max(float(waveform.time[0] + max_delay), anim_end - animation_cycles * period)
 
 fv.render_mode_animation(
     waveform, "tutorial.mp4",
     max_delay=max_delay, start_time=anim_start, end_time=anim_end,
-    frames=48, fps=24, resolution=110,
+    frames=frames, fps=24, resolution=110,
     component="plus", opacity_profile="shells", color_scheme="ice",
     presentation="shells_dramatic", opacity=0.30, camera_zoom=0.95,
     shell_count=7, smooth_sigma=1.2,
@@ -187,9 +191,10 @@ Both options also work in `render_mode_frame`. For a still, set
 The animation and cluster commands accept `--waveform-glow` and
 `--no-waveform-transparent`.
 
-`--animation-cycles` (via `start_time`/`end_time` here) sets how much inspiral
-is traversed; the frame count sets how smoothly. Aim for at least ~20 frames per
-wave cycle, or the wave pattern strobes.
+Change `animation_cycles` above to set the number of local waveform periods.
+Python takes the resulting `start_time` and `end_time` in seconds. The equivalent
+CLI flag is `--animation-cycles`. The start time is limited by the available
+waveform history. This example samples 24 frames per requested cycle.
 
 The same call renders the energy flux in motion. The `flux` profile
 self-normalizes each frame (a single fixed colour scale would be dominated by
@@ -200,7 +205,7 @@ stay visible as they propagate outward:
 fv.render_mode_animation(
     waveform, "tutorial-flux.mp4",
     max_delay=max_delay, start_time=anim_start, end_time=anim_end,
-    frames=30, fps=15, resolution=120,
+    frames=frames, fps=24, resolution=120,
     component="energy_flux", opacity_profile="flux", color_scheme="plasma",
     presentation="shells_dramatic", color_exposure=2.2,
     camera_view="oblique", camera_zoom=0.62, smooth_sigma=0.7,

@@ -33,6 +33,7 @@ from fewview._core import (
     estimate_waveform_period,
     generate_relativistic_mode_waveform,
     polarizations_from_complex,
+    render_volume,
 )
 
 
@@ -621,6 +622,26 @@ class VisualizationTest(unittest.TestCase):
             secondary_mass=10.0,
             spin=spin,
         )
+
+    @patch("fewview._core.add_volume_credit")
+    @patch("fewview._core._build_volume_scene")
+    def test_prebuilt_volume_orbit_overlays(self, build_scene, _credit):
+        waveform = self._body_waveform(p0=12.0, e0=0.4, spin=0.9)
+        waveform.modes[:, 0] = np.exp(-2j * waveform.trajectory_phi_phi)
+        volume = build_mode_retarded_time_volume(waveform, max_delay=3000.0, resolution=8)
+        plotter = build_scene.return_value
+        for options, expect_bodies, expect_trail in (
+            ({}, False, False),
+            ({"waveform": waveform}, True, True),
+            ({"waveform": waveform, "show_trajectory": False}, True, False),
+            ({"waveform": waveform, "show_bodies": False}, False, True),
+        ):
+            with self.subTest(bodies=expect_bodies, trail=expect_trail):
+                plotter.reset_mock()
+                render_volume(volume, show=False, **options)
+                meshes = [call.args[0] for call in plotter.add_mesh.call_args_list]
+                self.assertEqual(any("trajectory_rgba" in mesh.point_data for mesh in meshes), expect_trail)
+                self.assertEqual(any(mesh.faces.size > 0 for mesh in meshes), expect_bodies)
 
     def _drawn_bodies(self, waveform, *, orbit_display_radius=0.2, exaggeration=2.0):
         """Return the drawn radii alongside the display periapsis and scale."""

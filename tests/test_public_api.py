@@ -5,9 +5,23 @@ import unittest
 
 import fewview
 from fewview._core import _resolve_few_model
+from fewview.cli import animate, cluster_job, cluster_segment, render_still
 
 
 class PublicApiTest(unittest.TestCase):
+    def test_source_overlay_defaults(self):
+        for renderer in (fewview.render_mode_animation, fewview.render_mode_frame, fewview.render_volume):
+            with self.subTest(renderer=renderer.__name__):
+                params = inspect.signature(renderer).parameters
+                self.assertIs(params["show_bodies"].default, True)
+                self.assertIs(params["show_trajectory"].default, True)
+
+        for cli in (render_still, animate, cluster_job, cluster_segment):
+            with self.subTest(cli=cli.__name__):
+                parser = cli.build_parser()
+                self.assertIs(parser.get_default("bodies"), True)
+                self.assertIs(parser.get_default("trajectory"), True)
+
     def test_version_is_exposed(self):
         self.assertRegex(fewview.__version__, r"^\d+\.\d+")
 

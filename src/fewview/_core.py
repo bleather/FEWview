@@ -1731,6 +1731,9 @@ def _resolve_volume_presentation(
 def render_volume(
     volume: RetardedTimeVolume,
     *,
+    waveform: RelativisticModeWaveform | None = None,
+    show_bodies: bool = True,
+    show_trajectory: bool = True,
     logo: Logo = "wordmark",
     component: VolumeComponent = "plus",
     screenshot: Optional[PathLike] = None,
@@ -1779,6 +1782,10 @@ def render_volume(
 
     Args:
         volume: Volume returned by :func:`build_retarded_time_volume`.
+        waveform: Source waveform for the optional orbit overlays. A volume
+            alone contains the wave field but no orbital positions.
+        show_bodies: Draw the two bodies when a waveform is supplied.
+        show_trajectory: Draw the fading orbital trail when a waveform is supplied.
         component: Scalar field to render.
         screenshot: Optional PNG path.
         show: Open the interactive PyVista window.
@@ -1845,6 +1852,8 @@ def render_volume(
 
     if image_scale < 1:
         raise ValueError("image_scale must be at least 1")
+    if waveform is not None:
+        _validate_source_overlays(waveform, show_bodies, show_trajectory)
     plotter = _build_volume_scene(
         volume,
         component=component,
@@ -1875,9 +1884,15 @@ def render_volume(
         camera_longitude=camera_longitude,
         starfield=starfield,
         star_count=star_count,
-        source_marker=source_marker,
+        source_marker=source_marker and not (waveform is not None and show_bodies),
         show_scalar_bar=show_scalar_bar,
     )
+    if waveform is not None:
+        _add_source_overlays(
+            plotter, waveform, frame_time=volume.frame_time, radius=volume.radius,
+            start_time=float(waveform.time[0]), end_time=volume.frame_time,
+            show_bodies=show_bodies, show_trajectory=show_trajectory,
+        )
     add_volume_credit(plotter, *window_size, plotter.background_color.float_rgb, logo)
     screenshot_path = None if screenshot is None else str(Path(screenshot))
     if show:
@@ -2251,6 +2266,18 @@ def _add_rim_lit_primary(plotter, primary) -> None:
     )
 
 
+def _validate_source_overlays(
+    waveform: RelativisticModeWaveform, show_bodies: bool, show_trajectory: bool
+) -> None:
+    if (show_bodies or show_trajectory) and not waveform.has_trajectory:
+        raise ValueError(
+            "Body and trajectory rendering requires the FEW trajectory arrays. "
+            "Regenerate relativistic-modes.npz with fewview-render, or set "
+            "show_bodies=False and show_trajectory=False "
+            "(--no-bodies --no-trajectory on the command line)."
+        )
+
+
 def _add_source_overlays(
     plotter,
     waveform: RelativisticModeWaveform,
@@ -2261,15 +2288,15 @@ def _add_source_overlays(
     end_time: float,
     show_bodies: bool,
     show_trajectory: bool,
-    trajectory_tail_cycles: float,
-    trajectory_line_width: float,
-    trajectory_as_tube: bool,
-    source_glow: bool,
-    trajectory_color: str,
-    orbit_display_radius: float,
-    primary_body_radius: float,
-    secondary_body_radius: float,
-    body_exaggeration: float,
+    trajectory_tail_cycles: float = 2.0,
+    trajectory_line_width: float = 1.6,
+    trajectory_as_tube: bool = False,
+    source_glow: bool = False,
+    trajectory_color: str = DEFAULT_TRAJECTORY_COLOR,
+    orbit_display_radius: float = 0.16,
+    primary_body_radius: float = 0.043,
+    secondary_body_radius: float = 0.014,
+    body_exaggeration: float = 2.0,
 ):
     """Add the shared bodies and fading FEW trajectory to a VTK scene."""
 
@@ -2688,11 +2715,7 @@ def render_mode_frame(
         raise ValueError("body_exaggeration must be positive")
     if show_waveform and not 0.1 <= waveform_fraction < 0.5:
         raise ValueError("waveform_fraction must be in the interval [0.1, 0.5)")
-    if (show_bodies or show_trajectory) and not waveform.has_trajectory:
-        raise ValueError(
-            "Body and trajectory rendering requires the FEW trajectory arrays. "
-            "Regenerate relativistic-modes.npz with fewview-render."
-        )
+    _validate_source_overlays(waveform, show_bodies, show_trajectory)
 
     import imageio.v2 as imageio
 
@@ -2894,8 +2917,8 @@ def render_mode_animation(
     starfield: Optional[bool] = None,
     star_count: Optional[int] = None,
     source_marker: bool = False,
-    show_bodies: bool = False,
-    show_trajectory: bool = False,
+    show_bodies: bool = True,
+    show_trajectory: bool = True,
     show_waveform: bool = False,
     trajectory_tail_cycles: float = 2.0,
     trajectory_line_width: float = 1.6,
@@ -2923,8 +2946,8 @@ def render_mode_animation(
     The expensive Cartesian angular harmonics and waveform splines are built
     once and reused.  Only the retarded-time mode values and volume scalar field
     change from frame to frame.  ``angular_sampling="spherical"`` retains the
-    older, lower-memory interpolated angular grid as a fallback.  When requested,
-    the central orbit is reconstructed from FEW's relativistic
+    older, lower-memory interpolated angular grid as a fallback. By default,
+    the bodies and orbital trail are reconstructed from FEW's relativistic
     :math:`(p,e,\Phi_r,\Phi_\phi)` trajectory.  Its overall spatial scale is a
     presentation choice set by ``orbit_display_radius``, but the bodies are then
     drawn on that same scale: the primary spans ``body_exaggeration`` horizon
@@ -3012,11 +3035,7 @@ def render_mode_animation(
         raise ValueError("body_exaggeration must be positive")
     if show_waveform and not 0.1 <= waveform_fraction < 0.5:
         raise ValueError("waveform_fraction must be in the interval [0.1, 0.5)")
-    if (show_bodies or show_trajectory) and not waveform.has_trajectory:
-        raise ValueError(
-            "Body and trajectory rendering requires the FEW trajectory arrays. "
-            "Regenerate relativistic-modes.npz with fewview-render."
-        )
+    _validate_source_overlays(waveform, show_bodies, show_trajectory)
     if suffix == ".mp4" and any(size % 2 for size in window_size):
         raise ValueError("MP4 window dimensions must both be even")
 

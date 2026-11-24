@@ -59,6 +59,12 @@ For the coherent flux proxy the field is the squared magnitude of the strain
 time derivative. Normalisation and radial tapering control the display, so the
 brightness in the rendered image has no absolute flux units.
 
+Stills and movies draw both bodies and the orbital trail by default. In Python,
+set `show_bodies=False` and `show_trajectory=False` to render an older waveform
+without trajectory arrays. The CLI equivalents are `--no-bodies --no-trajectory`.
+For a prebuilt volume, pass its source waveform to `render_volume(volume, waveform=wave)`
+to draw the orbit.
+
 ## Corner logo
 
 Figures and movies carry the transparent FEWview wordmark in the lower-right
