@@ -85,7 +85,7 @@ Use `--logo icon` (or `logo="icon"` in Python) for the orbit symbol alone.
 If you use FEWview to make a figure or movie for a paper, please cite the
 version you used. For v0.2.2, use the following reference.
 
-> Leather, B., & Witzany, V. (2026). *FEWview* (v0.2.2) [Software]. [GitHub release](https://github.com/bleather/FEWview/releases/tag/v0.2.2).
+> Leather, B. (2026). *FEWview* (v0.2.2) [Software]. [GitHub release](https://github.com/bleather/FEWview/releases/tag/v0.2.2).
 
 For BibTeX, select **Cite this repository** on the GitHub repository page.
 Please also cite FastEMRIWaveforms and the waveform model you used to generate
