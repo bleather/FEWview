@@ -91,6 +91,12 @@ For BibTeX, select **Cite this repository** on the GitHub repository page.
 Please also cite FastEMRIWaveforms and the waveform model you used to generate
 the inspiral. [FEW citation guide](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms#citation)
 
+## Related projects
+
+- [**fewviz**](https://github.com/znasipak/fewviz) by Zachary Nasipak animates
+  an inspiral orbit alongside its waveform from FastEMRIWaveforms. It can also
+  render the outgoing gravitational-wave strain in 3D.
+
 ## Acknowledgements
 
 The outgoing-wave visualisation follows the approach used for numerical

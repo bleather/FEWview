@@ -79,6 +79,12 @@ If you use FEWview for a figure or movie, cite the release you used. For v0.2.2,
 For BibTeX, select **Cite this repository** on the [GitHub repository](https://github.com/bleather/FEWview).
 Please also cite FEW and the waveform model you used. [FEW citation guide](https://github.com/BlackHolePerturbationToolkit/FastEMRIWaveforms#citation)
 
+## Related projects
+
+- [**fewviz**](https://github.com/znasipak/fewviz) by Zachary Nasipak animates
+  an inspiral orbit alongside its waveform from FastEMRIWaveforms. It can also
+  render the outgoing gravitational-wave strain in 3D.
+
 ## Project artwork
 
 Figures and movies carry the FEWview wordmark in the lower-right corner.
